@@ -1,0 +1,56 @@
+import { City, SpaceType } from "@/types";
+
+export interface SpaceDef {
+    type: SpaceType;
+    cost: number;
+}
+
+export const SPACES: SpaceDef[] = [
+    { type: SpaceType.Go, cost: 0 },
+    { type: SpaceType.Track, cost: 1000 },
+    { type: SpaceType.SettlerRents, cost: 1000 },
+    { type: SpaceType.Land, cost: 1000 },
+    { type: SpaceType.RoadbedCosts, cost: 1000 },
+    { type: SpaceType.Track, cost: 2000 },
+    { type: SpaceType.Rebellion, cost: 0 },
+    { type: SpaceType.Land, cost: 3000 },
+    { type: SpaceType.Track, cost: 4000 },
+    { type: SpaceType.Land, cost: 5000 },
+    { type: SpaceType.EndOfTrack, cost: 0 },
+    { type: SpaceType.Track, cost: 6000 },
+    { type: SpaceType.LandClaims, cost: 1000 },
+    { type: SpaceType.Land, cost: 7000 },
+    { type: SpaceType.SurveyFees, cost: 3000 },
+    { type: SpaceType.Track, cost: 8000 },
+    { type: SpaceType.Scandal, cost: 10000 },
+    { type: SpaceType.Land, cost: 9000 },
+    { type: SpaceType.Track, cost: 10000 },
+    { type: SpaceType.Land, cost: 12000 }
+];
+
+export const CITY_VALUES: Record<City, number[]> = {
+    [City.Calgary]: [0, 5000, 12000, 22000, 35000, 50000],
+    [City.Edmonton]: [0, 6000, 15000, 27000, 42000, 60000],
+    [City.Montreal]: [0, 10000, 25000, 45000, 70000, 100000],
+    [City.Regina]: [0, 7000, 17000, 32000, 50000, 70000],
+    [City.Saskatoon]: [0, 8000, 20000, 36000, 56000, 80000],
+    [City.Sudbury]: [0, 5000, 12000, 22000, 35000, 50000],
+    [City.Toronto]: [0, 6000, 15000, 27000, 42000, 60000],
+    [City.Vancouver]: [0, 9000, 22000, 40000, 63000, 90000],
+    [City.Winnipeg]: [0, 4000, 10000, 18000, 28000, 40000]
+};
+
+export const VALID_CITY_PAIRS: [City, City][] = [
+    [City.Montreal, City.Toronto],
+    [City.Montreal, City.Sudbury],
+    [City.Toronto, City.Winnipeg],
+    [City.Toronto, City.Regina],
+    [City.Sudbury, City.Saskatoon],
+    [City.Sudbury, City.Winnipeg],
+    [City.Winnipeg, City.Calgary],
+    [City.Winnipeg, City.Edmonton],
+    [City.Regina, City.Calgary],
+    [City.Saskatoon, City.Edmonton],
+    [City.Calgary, City.Vancouver],
+    [City.Edmonton, City.Vancouver]
+];

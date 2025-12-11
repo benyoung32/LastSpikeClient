@@ -1,73 +1,75 @@
 import { Player, SessionData } from "@/types";
+import axios, { AxiosResponse } from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5098";
+export const API_BASE_URL = "http://localhost:5098";
 
-async function handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
+async function handleResponse<T>(request: Promise<AxiosResponse<T>>): Promise<T> {
+    try {
+        const response = await request;
+        // If data is empty string (no content), return empty object as T to match previous behavior
+        return response.data === "" ? ({} as T) : response.data;
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response) {
+            const status = error.response.status;
+            const statusText = error.response.statusText;
+            const errorData = error.response.data;
+            const errorText = typeof errorData === 'string' ? errorData : JSON.stringify(errorData);
+
+            throw new Error(`API Error: ${status} ${statusText} - ${errorText}`);
+        }
+        throw error;
     }
-    // Check if response has content before parsing JSON
-    const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
+}
+
+export async function getSessionPlayers(sessionId: string): Promise<Player[]> {
+    return handleResponse<Player[]>(
+        axios.get(`${API_BASE_URL}/api/Sessions/${sessionId}/players`)
+    );
 }
 
 export async function createPlayer(name: string): Promise<Player> {
-    console.log("Creating player:", name);
-    console.log("API Base URL:", API_BASE_URL);
-    const response = await fetch(`${API_BASE_URL}/api/Players`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name }),
-    });
-    return handleResponse<Player>(response);
+    return handleResponse<Player>(
+        axios.post(`${API_BASE_URL}/api/Players`, { name })
+    );
 }
 
 export async function getPlayer(playerId: string): Promise<Player> {
-    const response = await fetch(`${API_BASE_URL}/api/Players/${playerId}`);
-    return handleResponse<Player>(response);
+    return handleResponse<Player>(
+        axios.get(`${API_BASE_URL}/api/Players/${playerId}`)
+    );
 }
 
 export async function createSession(hostPlayerId: string): Promise<SessionData> {
     // Create session
-    const response = await fetch(`${API_BASE_URL}/api/Sessions`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ playerIds: [hostPlayerId] }), // Initialize with host? Or empty and join?
-        // Based on api.json, SessionData requires playerIds. 
-        // Usually creating a session might just be a POST to /api/Sessions with some initial data.
-        // Let's try sending just the required fields if any. 
-        // The schema says playerIds is required.
-    });
-
-    // If the API requires us to join separately, we might need to adjust.
-    // But for now, let's assume we pass the host in the creation or join immediately after.
-    // The prompt says: "The create session button should call the session create endpoint, using the above player id as the first player, then join the session"
-    // This implies the create endpoint might NOT automatically join the creator, or we need to pass it.
-    // Let's assume we pass it in playerIds if the API allows, otherwise we join after.
-
-    return handleResponse<SessionData>(response);
+    return handleResponse<SessionData>(
+        axios.post(`${API_BASE_URL}/api/Sessions`, { playerIds: [hostPlayerId] })
+    );
 }
 
 export async function joinSession(sessionId: string, playerId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/Sessions/${sessionId}/players/${playerId}`, {
-        method: "POST",
-    });
-    return handleResponse<void>(response);
+    return handleResponse<void>(
+        axios.post(`${API_BASE_URL}/api/Sessions/${sessionId}/players/${playerId}`)
+    );
 }
 
 export async function getSession(sessionId: string): Promise<SessionData> {
-    const response = await fetch(`${API_BASE_URL}/api/Sessions/${sessionId}`);
-    return handleResponse<SessionData>(response);
+    return handleResponse<SessionData>(
+        axios.get(`${API_BASE_URL}/api/Sessions/${sessionId}`)
+    );
 }
 
 export async function startGame(sessionId: string, playerId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/Sessions/${sessionId}/start_game?playerId=${playerId}`, {
-        method: "PUT",
-    });
-    return handleResponse<void>(response);
+    return handleResponse<void>(
+        axios.put(`${API_BASE_URL}/api/Sessions/${sessionId}/start_game`, null, {
+            params: { playerId }
+        })
+    );
+}
+
+export async function getGameState(boardId: string): Promise<any> {
+    // Return generalized any for now until GameState type matches server fully or we update types/index.ts
+    // The user previously mentioned the route is /api/{id}/gamestate, mapped to Sessions controller usually
+    return handleResponse<any>(
+        axios.get(`${API_BASE_URL}/api/GameBoards/${boardId}/gamestate`)
+    );
 }

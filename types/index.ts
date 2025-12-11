@@ -62,7 +62,8 @@ export enum SpaceType {
     Rebellion,
     EndOfTrack,
     LandClaims,
-    SurveyFees
+    SurveyFees,
+    Scandal
 }
 
 export enum City {
