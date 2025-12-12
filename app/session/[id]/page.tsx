@@ -3,10 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState } from "@/lib/api";
-import { SessionData, Player, GameState } from "@/types";
+import { SessionData, Player, GameState, City, createEmptyGameState, ActionType } from "@/types";
+import { VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useSignalR } from "@/app/context/SignalRContext";
 import LobbyView from "@/app/components/LobbyView";
 import GameBoard from "@/app/components/GameBoard";
+import ActionBar from "@/app/components/ActionBar";
+
 
 export default function SessionPage() {
     const params = useParams();
@@ -16,7 +19,7 @@ export default function SessionPage() {
 
     const [session, setSession] = useState<SessionData | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
-    const [gameState, setGameState] = useState<GameState | null>(null);
+    const [gameState, setGameState] = useState<GameState>(createEmptyGameState());
     const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -43,23 +46,18 @@ export default function SessionPage() {
         }
     }, [sessionId]);
 
-    const fetchGameState = useCallback(async () => {
+    const fetchGameState = useCallback(async (boardId: string) => {
         try {
-            if (!session?.boardId) {
-                console.log(session)
-                console.error("No board ID found for session");
-                return;
-            }
-            const data = await getGameState(session.boardId);
+            const data = await getGameState(boardId);
             console.log("Game state:", data);
             setGameState(data);
         } catch (err: any) {
             console.error("Failed to fetch game state:", err);
             // Don't set error here to avoid blocking the UI if just the game state fails
         }
-    }, [sessionId]);
+    }, []);
 
-    const fetchSessionData = useCallback(async () => {
+    const fetchSessionData = useCallback(async (shouldHandleLoadingState = false) => {
         try {
             const sessionData = await getSession(sessionId);
             setSession(sessionData);
@@ -73,27 +71,33 @@ export default function SessionPage() {
             }
 
             // If game is started, fetch game state
-            if (sessionData.startTime) {
-                fetchGameState();
+            if (sessionData.startTime && sessionData.boardId) {
+                fetchGameState(sessionData.boardId);
             }
 
         } catch (err: any) {
             console.error("Failed to fetch session:", err);
-            if (isLoading) {
+            if (shouldHandleLoadingState) {
                 setError("Failed to load session. It might not exist.");
             }
         } finally {
-            setIsLoading(false);
+            if (shouldHandleLoadingState) {
+                setIsLoading(false);
+            }
         }
-    }, [sessionId, isLoading]);
+    }, [sessionId, fetchGameState]);
+
+    // SignalR Connection
+    // Initial Data Fetch
+    useEffect(() => {
+        if (!sessionId) return;
+        fetchSessionData(true);
+        fetchPlayerList();
+    }, [sessionId, fetchSessionData, fetchPlayerList]);
 
     // SignalR Connection
     useEffect(() => {
         if (!sessionId || !connection) return;
-
-        // Fetch initial data
-        fetchSessionData();
-        fetchPlayerList();
 
         // Join the SignalR group for this session
         if (currentPlayerId) {
@@ -113,20 +117,34 @@ export default function SessionPage() {
 
         const onGameStarted = () => {
             console.log("GameStarted event received");
-            fetchSessionData();
-            fetchGameState();
+            fetchSessionData(false);
         };
+
+        const onGameBoardUpdated = () => {
+            fetchGameState(sessionId);
+            // TODO: redraw the gameboard
+        }
+
+        const onYourTurn = (playerId: string, validActions: ActionType[]) => {
+            console.log("YourTurn event received");
+            if (playerId !== currentPlayerId) return;
+
+            // TODO: enable the action action bar
+        }
 
         connection.on("PlayerJoined", onPlayerJoined);
         connection.on("PlayerRemoved", onPlayerRemoved);
         connection.on("GameStarted", onGameStarted);
-
+        connection.on("GameBoardUpdated", onGameBoardUpdated);
+        connection.on("YourTurn", onYourTurn);
         return () => {
             connection.off("PlayerJoined", onPlayerJoined);
             connection.off("PlayerRemoved", onPlayerRemoved);
             connection.off("GameStarted", onGameStarted);
+            connection.off("GameBoardUpdated", onGameBoardUpdated);
+            connection.off("YourTurn", onYourTurn);
         };
-    }, [sessionId, connection, currentPlayerId, fetchSessionData, fetchPlayerList, fetchGameState]);
+    }, [sessionId, connection, currentPlayerId, fetchPlayerList, fetchSessionData]);
 
     const handleStartGame = async () => {
         if (!currentPlayerId) return;
@@ -141,6 +159,25 @@ export default function SessionPage() {
         } finally {
             setIsStarting(false);
         }
+    };
+
+    function getRebellionTargets() {
+        return gameState.routes.filter(route => route.numTracks > 0 && route.numTracks < 4);
+    }
+
+    function getBuildableRoutes() {
+        return gameState.routes.filter(route => route.numTracks < 4);
+    }
+
+    const getValidRoutes = useCallback(() => {
+        // TODO: Implement logic based on game state and current player
+        // For now, return all routes as valid to demonstrate selection
+        return VALID_CITY_PAIRS;
+    }, [gameState, currentPlayerId]);
+
+    const handleRouteSelect = (route: City[]) => {
+        console.log("Selected Route:", route.map(c => City[c]).join(" - "));
+        // TODO: Send action to server
     };
 
     if (isLoading) {
@@ -167,12 +204,20 @@ export default function SessionPage() {
 
     if (hasGameStarted) {
         return (
-            <GameBoard
-                session={session}
-                players={players}
-                currentPlayerId={currentPlayerId}
-                gameState={gameState}
-            />
+            <>
+                <GameBoard
+                    session={session}
+                    players={players}
+                    currentPlayerId={currentPlayerId}
+                    gameState={gameState}
+                    onRouteSelect={handleRouteSelect}
+                    validRoutes={getValidRoutes()}
+                />
+                <ActionBar
+                    validActions={[ActionType.Move, ActionType.Pass, ActionType.Trade]} // TODO: Replace with dynamic valid actions based on game state
+                    onActionSelect={(action) => console.log("Selected Action:", ActionType[action])}
+                />
+            </>
         );
     }
 

@@ -1,4 +1,4 @@
-import { Player, SessionData } from "@/types";
+import { Player, SessionData, GameState } from "@/types";
 import axios, { AxiosResponse } from "axios";
 
 export const API_BASE_URL = "http://localhost:5098";
@@ -66,10 +66,8 @@ export async function startGame(sessionId: string, playerId: string): Promise<vo
     );
 }
 
-export async function getGameState(boardId: string): Promise<any> {
-    // Return generalized any for now until GameState type matches server fully or we update types/index.ts
-    // The user previously mentioned the route is /api/{id}/gamestate, mapped to Sessions controller usually
-    return handleResponse<any>(
+export async function getGameState(boardId: string): Promise<GameState> {
+    return handleResponse<GameState>(
         axios.get(`${API_BASE_URL}/api/GameBoards/${boardId}/gamestate`)
     );
 }

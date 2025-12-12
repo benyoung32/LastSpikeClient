@@ -1,6 +1,6 @@
 export interface Player {
     id: string;
-    name: string | null;
+    name: string;
 }
 
 export interface SessionData {
@@ -13,12 +13,23 @@ export interface SessionData {
 }
 
 export interface GameState {
-    players: Record<string, PlayerState> | null;
-    routes: Route[] | null;
-    properties: Property[] | null;
+    players: Record<string, PlayerState>;
+    routes: Route[];
+    properties: Property[];
     isGameOver: boolean;
     currentPlayerId: string;
     turnPhase: TurnPhase;
+}
+
+export function createEmptyGameState(): GameState {
+    return {
+        players: {},
+        routes: [],
+        properties: [],
+        isGameOver: false,
+        currentPlayerId: "",
+        turnPhase: TurnPhase.Start
+    };
 }
 
 export interface PlayerState {
@@ -28,7 +39,7 @@ export interface PlayerState {
 }
 
 export interface Route {
-    cityPair: City[] | null;
+    cityPair: City[];
     numTracks: number;
 }
 
