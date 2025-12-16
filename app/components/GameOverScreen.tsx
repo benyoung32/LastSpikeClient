@@ -41,7 +41,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, 
                             ${index === 0 ? 'bg-amber-900/20 text-amber-200' : 'hover:bg-zinc-800/50'}
                         `}
                     >
-                        <div className="col-span-2 text-center text-2xl font-bold font-mono text-zinc-500">
+                        <div className="col-span-2 text-center text-2xl font-bold font-cute text-zinc-500">
                             {index === 0 ? '👑' : `#${index + 1}`}
                         </div>
                         <div className="col-span-7 flex items-center">
@@ -54,7 +54,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, 
                                 </span>
                             )}
                         </div>
-                        <div className="col-span-3 text-right font-mono text-xl text-green-400">
+                        <div className="col-span-3 text-right font-cute text-xl text-green-400">
                             ${player.money.toLocaleString()}
                         </div>
                     </div>

@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState, selectAction } from "@/lib/api";
-import { SessionData, Player, GameState, City, createEmptyGameState, ActionType, Route } from "@/types";
+import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState, selectAction, offerTrade, respondToTrade } from "@/lib/api";
+import { SessionData, Player, GameState, City, createEmptyGameState, ActionType, Route, PLAYER_COLORS, Trade } from "@/types";
 import { VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useSignalR } from "@/app/context/SignalRContext";
 import LobbyView from "@/app/components/LobbyView";
@@ -11,13 +11,14 @@ import GameBoard from "@/app/components/GameBoard";
 import ActionBar from "@/app/components/ActionBar";
 import { PlayerInfoPanel } from "@/app/components/PlayerInfoPanel";
 import GameOverScreen from "@/app/components/GameOverScreen";
+import TradeWindow from "@/app/components/TradeWindow";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
     "bottom-4 right-[15vw] translate-x-1/2", // Slot 1: Bottom Right
-    "top-1/2 right-4 -translate-y-1/2 origin-right",      // Slot 2: Right Edge
-    "top-4 right-[15vw] translate-x-1/2",     // Slot 3: Top Right
-    "top-4 left-[15vw] -translate-x-1/2",      // Slot 4: Top Left
+    "top-4 right-[15vw] translate-x-1/2",     // Slot 2: Top Right
+    "top-4 left-[15vw] -translate-x-1/2",      // Slot 3: Top Left
+    "top-1/2 right-4 -translate-y-1/2 origin-right",      // Slot 4: Right Edge
     "top-1/2 left-4 -translate-y-1/2 origin-left"        // Slot 5: Left Edge
 ];
 
@@ -37,6 +38,7 @@ export default function SessionPage() {
     const [isStarting, setIsStarting] = useState(false);
     const [validActions, setValidActions] = useState<ActionType[]>([]);
     const [selectableRoutes, setSelectableRoutes] = useState<Route[]>([]);
+    const [isTradeWindowOpen, setIsTradeWindowOpen] = useState(false);
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
     const sessionRef = useRef(session);
@@ -96,7 +98,7 @@ export default function SessionPage() {
             const data = await getGameState(bid);
             console.log("Game state:", data);
 
-            const currentValidActions = data.currentPlayerId === clientPlayerId ? data.validActions : [];
+            const currentValidActions = (data.currentPlayerId === clientPlayerId ? data.validActions : []).map(a => Number(a)) as ActionType[];
             const nextSelectableRoutes = getValidRoutes(data, currentValidActions);
 
             const currentGameState = gameStateRef.current;
@@ -361,19 +363,74 @@ export default function SessionPage() {
                             properties={playerProperties}
                             screenPosition={INFO_PANEL_POSITIONS[index]}
                             isClient={p.id === clientPlayerId}
+                            color={players.findIndex(pl => pl.id === p.id) !== -1 ? PLAYER_COLORS[players.findIndex(pl => pl.id === p.id) % PLAYER_COLORS.length] : "#ffffff"}
                         />
                     );
                 })}
 
                 <ActionBar
                     validActions={validActions}
+                    // Hide action bar if there is a pending trade for me (I must respond first)
+                    // The trade object in GameState: Player2Id is the receiver.
+                    isVisible={!gameState.pendingTrade}
                     onActionSelect={(async (action: ActionType) => {
+                        if (Number(action) === ActionType.TradeOffer) {
+                            setIsTradeWindowOpen(true);
+                            return;
+                        }
+                        if (Number(action) === ActionType.AcceptTradeOffer) {
+                            if (!session || !clientPlayerId) return;
+                            await respondToTrade(session.boardId, clientPlayerId, true)
+                                .catch((err) => console.error("Error accepting trade:", err));
+                            return;
+                        }
                         if (!session || !connection || !clientPlayerId) return;
                         await selectAction(session.boardId, clientPlayerId, action)
                             .catch((err) => console.error("Error selecting action:", err));
 
                     })}
                 />
+
+                {clientPlayerId && (
+                    <TradeWindow
+                        visible={isTradeWindowOpen || (!!gameState.pendingTrade && gameState.pendingTrade.player2Id === clientPlayerId)}
+                        onClose={() => setIsTradeWindowOpen(false)}
+                        onSubmit={async (trade) => {
+                            if (!session || !clientPlayerId) return;
+                            console.log("Submitting trade:", trade);
+                            try {
+                                await offerTrade(session.boardId, trade);
+                                setIsTradeWindowOpen(false);
+                            } catch (err) {
+                                console.error("Failed to submit trade:", err);
+                            }
+                        }}
+                        currentPlayerId={clientPlayerId}
+                        players={players}
+                        gameState={gameState}
+                        pendingTrade={gameState.pendingTrade}
+                        onAccept={async () => {
+                            console.log("Accepting trade");
+                            if (!session || !clientPlayerId) return;
+                            try {
+                                await respondToTrade(session.boardId, clientPlayerId, true);
+                                setIsTradeWindowOpen(false); // Ensure local state is closed too
+                            } catch (err) {
+                                console.error("Failed to accept trade", err);
+                            }
+                        }}
+                        onDeny={async () => {
+                            console.log("Denying trade");
+                            if (!session || !clientPlayerId) return;
+                            try {
+                                await respondToTrade(session.boardId, clientPlayerId, false);
+                                setIsTradeWindowOpen(false);
+                            } catch (err) {
+                                console.error("Failed to deny trade", err);
+                            }
+                        }}
+                    />
+                )}
             </>
         );
     }

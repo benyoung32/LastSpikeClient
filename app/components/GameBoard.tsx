@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
-import { Player, Route, SessionData, City, SpaceType, GameState, CITY_COLORS, CITY_VALUES } from "@/types";
+import { Player, Route, SessionData, City, SpaceType, GameState, CITY_COLORS, PLAYER_COLORS } from "@/types";
 import { SPACES, VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { PropertyCard } from "./PropertyCard";
@@ -57,7 +57,7 @@ const CITY_COORDS: Record<City, { x: number; y: number }> = {
 
 const SPACE_COLORS: Record<SpaceType, string> = {
     [SpaceType.Land]: "#0557dba4",       // Blue
-    [SpaceType.Go]: "#22c55eaf",         // Green
+    [SpaceType.CPRSubsidy]: "#22c55eaf",         // Green
     [SpaceType.SettlerRents]: "#f97416ab", // Orange
     [SpaceType.Track]: "#eab208b0",      // Yellow
     [SpaceType.LandClaims]: "#8a5cf6b6", // Violet
@@ -69,7 +69,7 @@ const SPACE_COLORS: Record<SpaceType, string> = {
 }
 
 const SPACE_DESCRIPTIONS: Record<SpaceType, string> = {
-    [SpaceType.Go]: "Collect $5000 when landing on or passing Go",
+    [SpaceType.CPRSubsidy]: "Collect $5000 when landing on CPR Subsidy, not passing it",
     [SpaceType.Track]: `You must build a track if you land here.
     Building on an empty route awards a free deed. 
     Completing a route awards all players who own deeds of either city. 
@@ -84,16 +84,6 @@ const SPACE_DESCRIPTIONS: Record<SpaceType, string> = {
     [SpaceType.Scandal]: "Get caught visiting a tropical island. Pay {cost}",
 };
 
-const PLAYER_COLORS = [
-    "#ef4444",
-    "#3b82f6",
-    "#22c55e",
-    "#eab308",
-    "#a855f7",
-    "#ec4899",
-    "#f97316",
-    "#06b6d4",
-];
 
 const getCityPos = (city: City) => {
     const offset = CITY_COORDS[city];
@@ -191,7 +181,7 @@ interface PlayerTokenProps {
     getSoundDuration: (sound: string) => number;
 }
 
-const PlayerToken = ({ playerId, color, boardPosition, offset, addSound, getSoundDuration }: PlayerTokenProps) => {
+const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, getSoundDuration }: PlayerTokenProps) => {
     const controls = useAnimation();
     const prevPositionRef = useRef<number>(boardPosition);
 
@@ -295,7 +285,15 @@ const PlayerToken = ({ playerId, color, boardPosition, offset, addSound, getSoun
             />
         </motion.g>
     );
-}
+}, (prev, next) => {
+    return (
+        prev.playerId === next.playerId &&
+        prev.color === next.color &&
+        prev.boardPosition === next.boardPosition &&
+        prev.offset.x === next.offset.x &&
+        prev.offset.y === next.offset.y
+    );
+});
 
 
 export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes }: GameBoardProps) {
@@ -462,7 +460,10 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
 
                                         if (numTracks === 0) return null;
 
-                                        const isReversed = p1.x > p2.x;
+                                        const midX = (p1.x + p2.x) / 2;
+                                        const isRightSide = midX > MAP_CENTER_X;
+
+                                        const isReversed = isRightSide ? p1.x < p2.x : p1.x > p2.x;
                                         const start = isReversed ? p2 : p1;
                                         const end = isReversed ? p1 : p2;
 
@@ -473,24 +474,25 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         const dist = Math.sqrt(dx * dx + dy * dy);
                                         const segLen = dist / 4;
 
+                                        const w = segLen + 1;
+                                        const h = 8; // Width of the track piece
+
+                                        // Ladder Style Track
+                                        const railWidth = 7;
+                                        const tieWidth = 6;
+                                        const railColor = "#000000ff"; // Dark Brown
+                                        const tieColor = "#000000ff"; // Dark Brown
+
                                         return Array.from({ length: numTracks }).map((_, tIdx) => {
                                             const t = (tIdx + 0.5) / 4.0;
                                             const cx = start.x + dx * t;
                                             const cy = start.y + dy * t;
 
-                                            const w = segLen + 1;
-                                            const h = 8; // Width of the track piece
-
-                                            // Ladder Style Track
-                                            const railWidth = 5;
-                                            const tieWidth = 5;
-                                            const railColor = "#451a03"; // Dark Brown
-                                            const tieColor = "#451a03"; // Dark Brown
                                             return (
                                                 <g
                                                     key={`track-${idx}-${tIdx}`}
                                                     transform={`translate(${cx}, ${cy}) rotate(${angle})`}
-                                                    className={`transition-all duration-100 pointer-events-none group-hover:brightness-150`}
+                                                    className={`transition-all duration-100 pointer-events-none`}
                                                 >
                                                     {/* Sleeper Ties (3 per segment) */}
                                                     {[-0.25, 0, 0.25].map((offset, i) => (
@@ -570,7 +572,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                         {SPACES.map((space, index) => {
                             const { x, y, width, height, isCorner } = getSpaceGeometry(index);
 
-                            const label = SpaceType[space.type].replace(/([A-Z])/g, ' $1').trim();
+                            const label = SpaceType[space.type].replace(/([A-Z])/g, '$1').trim();
 
                             return (
                                 <g

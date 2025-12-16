@@ -6,7 +6,7 @@ export interface SpaceDef {
 }
 
 export const SPACES: SpaceDef[] = [
-    { type: SpaceType.Go, cost: 0 },
+    { type: SpaceType.CPRSubsidy, cost: 0 },
     { type: SpaceType.Track, cost: 1000 },
     { type: SpaceType.SettlerRents, cost: 1000 },
     { type: SpaceType.Land, cost: 1000 },
@@ -53,4 +53,13 @@ export const VALID_CITY_PAIRS: CityPair[] = [
     { city1: City.Saskatoon, city2: City.Edmonton },
     { city1: City.Calgary, city2: City.Vancouver },
     { city1: City.Edmonton, city2: City.Vancouver }
+];
+
+const PLAYER_COLORS = [
+    "#ef4444",
+    "#3b82f6",
+    "#22c55e",
+    "#eab308",
+    "#a855f7",
+    "#ec4899",
 ];

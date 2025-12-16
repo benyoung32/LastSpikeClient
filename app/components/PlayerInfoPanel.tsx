@@ -47,7 +47,7 @@ const AnimatedMoney = ({ value }: { value: number }) => {
     return (
         <motion.div
             animate={controls}
-            className="text-emerald-400 font-mono font-bold text-xl leading-none"
+            className="text-emerald-400 font-cute font-bold text-xl leading-none"
         >
             <span ref={nodeRef}>${value.toLocaleString()}</span>
         </motion.div>
@@ -60,6 +60,7 @@ interface PlayerInfoPanelProps {
     properties: Property[];
     screenPosition: string;
     isClient: boolean;
+    color: string;
 }
 
 export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
@@ -67,19 +68,29 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
     money,
     properties,
     screenPosition,
-    isClient
+    isClient,
+    color
 }) => {
     return (
-        <div className={`absolute flex flex-col gap-3 p-4 bg-slate-900/90 backdrop-blur-md rounded-xl border shadow-xl transition-all duration-300 w-64 ${isClient ? 'border-emerald-500/50 shadow-emerald-500/10' : 'border-slate-700'
-            } ${screenPosition}`}>
+        <div
+            className={`absolute flex flex-col gap-3 p-4 bg-slate-900/90 backdrop-blur-md rounded-xl border shadow-xl transition-all duration-300 w-64 ${screenPosition}`}
+            style={{
+                borderColor: color,
+                boxShadow: `0 0 15px ${color}40`
+            }}
+        >
 
             <div className="flex justify-between items-end border-b border-slate-700/50 pb-2">
                 <div className="flex flex-col overflow-hidden">
                     <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                         {isClient ? 'You' : ''}
                     </span>
-                    <span className="font-bold text-lg text-white truncate" title={player.name}>
-                        {player.name} {player.id}
+                    <span
+                        className="font-bold text-lg truncate"
+                        style={{ color: color }}
+                        title={player.name}
+                    >
+                        {player.name}
                     </span>
                 </div>
                 <div className="text-right">

@@ -37,11 +37,11 @@ export function createEmptyGameState(): GameState {
 }
 
 export interface Trade {
-    Player1Id: string;
-    Player2Id: string;
-    Properties: Property[];
-    Player1Money: number;
-    Player2Money: number;
+    player1Id: string;
+    player2Id: string;
+    properties: Property[];
+    player1Money: number;
+    player2Money: number;
 }
 
 export interface PlayerState {
@@ -70,10 +70,11 @@ export enum ActionType {
     Ok,
     Pass,
     Rebellion,
-    Trade,
+    TradeOffer,
     PlaceTrack,
     Roll,
-    Buy
+    Buy,
+    AcceptTradeOffer
 }
 
 export enum TurnPhase {
@@ -84,7 +85,7 @@ export enum TurnPhase {
 }
 
 export enum SpaceType {
-    Go,
+    CPRSubsidy,
     Track,
     SettlerRents,
     Land,
@@ -131,4 +132,14 @@ export const CITY_COLORS: Record<City, string> = {
     [City.Vancouver]: "#9e878f", // Cyan
     [City.Winnipeg]: "#d9753a"   // Grey
 };
+
+export const PLAYER_COLORS = [
+    "#eb3434ff",
+    "#3b82f6",
+    "#22c55e",
+    "#eab308",
+    "#a855f7",
+    "#ec4899",
+];
+
 

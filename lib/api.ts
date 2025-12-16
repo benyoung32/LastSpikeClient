@@ -1,4 +1,4 @@
-import { Player, SessionData, GameState, ActionType, Route, CityPair } from "@/types";
+import { Player, SessionData, GameState, ActionType, Route, CityPair, Trade } from "@/types";
 import axios, { AxiosResponse } from "axios";
 
 export const API_BASE_URL = "http://localhost:5098";
@@ -79,6 +79,21 @@ export async function selectAction(boardId: string, playerId: string, type: Acti
                 city1: target?.city1,
                 city2: target?.city2
             }
+        })
+    );
+}
+
+export async function offerTrade(boardId: string, trade: Trade): Promise<void> {
+    return handleResponse<void>(
+        axios.put(`${API_BASE_URL}/api/GameBoards/${boardId}/offer-trade`, trade)
+    );
+}
+
+export async function respondToTrade(boardId: string, playerId: string, accept: boolean): Promise<void> {
+    return handleResponse<void>(
+        axios.put(`${API_BASE_URL}/api/GameBoards/${boardId}/trade-action`, {
+            playerId,
+            accept
         })
     );
 }

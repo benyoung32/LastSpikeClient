@@ -126,7 +126,7 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({ properties, 
                     <div
                         // Synchronize styles with trigger for seamless transition
                         className={`fixed border border-slate-700 overflow-hidden flex flex-col pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] 
-                            ${isAnimating ? 'bg-slate-800/80 rounded-lg shadow-none' : 'bg-slate-800 rounded-xl shadow-2xl'}
+                            ${isAnimating ? 'bg-slate-800/80 rounded-lg shadow-none' : 'bg-transparent border-none rounded-xl shadow-none'}
                         `}
                         style={getModalStyle()}
                     >
@@ -165,14 +165,14 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({ properties, 
                                 })}
 
                                 {properties.length === 0 && (
-                                    <div className="text-gray-500 italic mt-10 text-xl">No properties owned yet.</div>
+                                    <div className="text-gray-500 italic mt-10 text-xl font-cute">No properties owned yet.</div>
                                 )}
                             </div>
                         </div>
 
                         {/* Placeholder Content for Minimized State Fade */}
-                        <div className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-300 ${animationState === 'open' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                            <div className="text-emerald-400 font-bold">Properties</div>
+                        <div className={`font-cute absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-300 ${animationState === 'open' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                            <div className="text-emerald-400">Properties</div>
                             <div className="text-slate-300">{properties.length} Owned</div>
                         </div>
                     </div>

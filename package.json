@@ -10,6 +10,7 @@
     "simulate": "playwright test tests/game-flow.spec.ts --headed"
   },
   "dependencies": {
+    "@fontsource/fredoka": "^5.2.10",
     "@microsoft/signalr": "^10.0.0",
     "axios": "^1.13.2",
     "framer-motion": "^12.23.26",
