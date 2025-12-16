@@ -1,4 +1,4 @@
-import { Player, SessionData, GameState } from "@/types";
+import { Player, SessionData, GameState, ActionType, Route, CityPair } from "@/types";
 import axios, { AxiosResponse } from "axios";
 
 export const API_BASE_URL = "http://localhost:5098";
@@ -69,5 +69,16 @@ export async function startGame(sessionId: string, playerId: string): Promise<vo
 export async function getGameState(boardId: string): Promise<GameState> {
     return handleResponse<GameState>(
         axios.get(`${API_BASE_URL}/api/GameBoards/${boardId}/gamestate`)
+    );
+}
+
+export async function selectAction(boardId: string, playerId: string, type: ActionType, target?: CityPair): Promise<void> {
+    return handleResponse<void>(
+        axios.put(`${API_BASE_URL}/api/GameBoards/${boardId}/action`, {
+            type, playerId, target: {
+                city1: target?.city1,
+                city2: target?.city2
+            }
+        })
     );
 }

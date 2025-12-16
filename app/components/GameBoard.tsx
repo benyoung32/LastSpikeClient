@@ -1,26 +1,30 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Player, SessionData, City, SpaceType, GameState } from "@/types";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { Player, Route, SessionData, City, SpaceType, GameState, CITY_COLORS, CITY_VALUES } from "@/types";
 import { SPACES, VALID_CITY_PAIRS } from "@/lib/gameConstants";
+import { useGameSounds } from "@/app/hooks/useGameSounds";
+import { PropertyCard } from "./PropertyCard";
+import { motion, useAnimation, AnimatePresence } from "framer-motion";
 
 interface GameBoardProps {
     session: SessionData;
     players: Player[];
     currentPlayerId: string | null;
     gameState: GameState | null;
-    onRouteSelect: (route: City[]) => void;
-    validRoutes?: City[][];
+    onRouteSelect: (route: Route) => void;
+    validRoutes: Route[];
 }
 
 // Layout Constants for Internal SVG Coordinate System (1600x900)
 const VIEWBOX_WIDTH = 1400;
 const VIEWBOX_HEIGHT = 900;
 const BOARD_PADDING = 50; // Inner padding from the edge of the viewBox
-const CORNER_SIZE = 140; // Size of corner squares
+const CORNER_SIZE = 160; // Size of corner squares
 const CITY_RADIUS = 20;
-const CORNER_PADDING = 20;
-const SPACE_GAP = 2;
+const CORNER_PADDING = 30;
+const SPACE_GAP = 4;
 
 const BOARD_INNER_WIDTH = VIEWBOX_WIDTH - BOARD_PADDING * 2;
 const BOARD_INNER_HEIGHT = VIEWBOX_HEIGHT - BOARD_PADDING * 2;
@@ -52,17 +56,33 @@ const CITY_COORDS: Record<City, { x: number; y: number }> = {
 };
 
 const SPACE_COLORS: Record<SpaceType, string> = {
-    [SpaceType.Land]: "#4472efa9",
-    [SpaceType.Go]: "#0a91d3",
-    [SpaceType.SettlerRents]: "#a32a2f",
-    [SpaceType.Track]: "#be9f1fff",
-    [SpaceType.LandClaims]: "#5b45b1",
-    [SpaceType.Rebellion]: "#77216a",
-    [SpaceType.EndOfTrack]: "#6ca427",
-    [SpaceType.Scandal]: "#c23f9c",
-    [SpaceType.SurveyFees]: "#3da939",
-    [SpaceType.RoadbedCosts]: "#ae41caff",
+    [SpaceType.Land]: "#0557dba4",       // Blue
+    [SpaceType.Go]: "#22c55eaf",         // Green
+    [SpaceType.SettlerRents]: "#f97416ab", // Orange
+    [SpaceType.Track]: "#eab208b0",      // Yellow
+    [SpaceType.LandClaims]: "#8a5cf6b6", // Violet
+    [SpaceType.Rebellion]: "#ef4444c4",  // Red
+    [SpaceType.EndOfTrack]: "#64748b", // Slate
+    [SpaceType.Scandal]: "#ec489ab9",    // Pink
+    [SpaceType.SurveyFees]: "#10b981a2", // Emerald
+    [SpaceType.RoadbedCosts]: "#6365f1b1", // Indigo
 }
+
+const SPACE_DESCRIPTIONS: Record<SpaceType, string> = {
+    [SpaceType.Go]: "Collect $5000 when landing on or passing Go",
+    [SpaceType.Track]: `You must build a track if you land here.
+    Building on an empty route awards a free deed. 
+    Completing a route awards all players who own deeds of either city. 
+    `,
+    [SpaceType.SettlerRents]: "Collect {cost} for each deed owned",
+    [SpaceType.Land]: "Optionally pay {cost} to purchase a random remaining deed. There are 5 deeds for each city",
+    [SpaceType.RoadbedCosts]: "Pay {cost} for each deed owned",
+    [SpaceType.Rebellion]: "Remove a track piece from a route containing 2 or 3 pieces",
+    [SpaceType.EndOfTrack]: "Skip your next turn",
+    [SpaceType.LandClaims]: "Roll the dice. Pay the number rolled x {cost}",
+    [SpaceType.SurveyFees]: "Collect {cost} from all other players",
+    [SpaceType.Scandal]: "Get caught visiting a tropical island. Pay {cost}",
+};
 
 const PLAYER_COLORS = [
     "#ef4444",
@@ -83,15 +103,254 @@ const getCityPos = (city: City) => {
     };
 };
 
-export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes }: GameBoardProps) {
-    const [hoveredElement, setHoveredElement] = useState<string | null>(null);
+// --- Helper to calculate Space Geometry ---
+const getSpaceGeometry = (index: number) => {
+    let x = 0, y = 0, w = 0, h = 0;
+    let isCorner = false;
 
-    const isRouteValid = (c1: City, c2: City) => {
-        if (!validRoutes) return false;
-        return validRoutes.some(pair =>
-            (pair.includes(c1) && pair.includes(c2))
-        );
+    const left = BOARD_PADDING;
+    const top = BOARD_PADDING;
+    const right = VIEWBOX_WIDTH - BOARD_PADDING;
+    const bottom = VIEWBOX_HEIGHT - BOARD_PADDING;
+
+    if (index === 0) { // Bottom Right (GO)
+        isCorner = true;
+        x = right - CORNER_SIZE;
+        y = bottom - CORNER_SIZE;
+        w = CORNER_SIZE;
+        h = CORNER_SIZE;
+    } else if (index >= 1 && index <= 5) { // Bottom Edge
+        const offset = index - 1;
+        x = (right - CORNER_SIZE) - (offset + 1) * SPACE_WIDTH_H;
+        y = bottom - CORNER_SIZE + CORNER_PADDING;
+        w = SPACE_WIDTH_H;
+        h = CORNER_SIZE - CORNER_PADDING;
+    } else if (index === 6) { // Bottom Left
+        isCorner = true;
+        x = left;
+        y = bottom - CORNER_SIZE;
+        w = CORNER_SIZE;
+        h = CORNER_SIZE;
+    } else if (index >= 7 && index <= 9) { // Left Edge
+        const offset = index - 7;
+        x = left;
+        y = (bottom - CORNER_SIZE) - (offset + 1) * SPACE_HEIGHT_V;
+        w = CORNER_SIZE - CORNER_PADDING;
+        h = SPACE_HEIGHT_V;
+    } else if (index === 10) { // Top Left
+        isCorner = true;
+        x = left;
+        y = top;
+        w = CORNER_SIZE;
+        h = CORNER_SIZE;
+    } else if (index >= 11 && index <= 15) { // Top Edge
+        const offset = index - 11;
+        x = left + CORNER_SIZE + (offset * SPACE_WIDTH_H);
+        y = top;
+        w = SPACE_WIDTH_H;
+        h = CORNER_SIZE - CORNER_PADDING;
+    } else if (index === 16) { // Top Right
+        isCorner = true;
+        x = right - CORNER_SIZE;
+        y = top;
+        w = CORNER_SIZE;
+        h = CORNER_SIZE;
+    } else if (index >= 17 && index <= 19) { // Right Edge
+        const offset = index - 17;
+        x = right - CORNER_SIZE + CORNER_PADDING;
+        y = top + CORNER_SIZE + (offset * SPACE_HEIGHT_V);
+        w = CORNER_SIZE - CORNER_PADDING;
+        h = SPACE_HEIGHT_V;
+    }
+
+    return {
+        x: x + SPACE_GAP,
+        y: y + SPACE_GAP,
+        width: w - (SPACE_GAP * 2),
+        height: h - (SPACE_GAP * 2),
+        isCorner
     };
+};
+
+const getSpaceCenter = (index: number) => {
+    const { x, y, width, height } = getSpaceGeometry(index);
+    return {
+        x: x + width / 2,
+        y: y + height / 2
+    };
+};
+
+
+// --- PlayerToken Component ---
+interface PlayerTokenProps {
+    playerId: string;
+    color: string;
+    boardPosition: number;
+    offset: { x: number, y: number };
+    addSound: (sound: string) => void;
+    getSoundDuration: (sound: string) => number;
+}
+
+const PlayerToken = ({ playerId, color, boardPosition, offset, addSound, getSoundDuration }: PlayerTokenProps) => {
+    const controls = useAnimation();
+    const prevPositionRef = useRef<number>(boardPosition);
+
+    useEffect(() => {
+        const prevPos = prevPositionRef.current;
+        const currentPos = boardPosition;
+
+        if (prevPos !== currentPos) {
+            let steps: number[] = [];
+
+            if (currentPos > prevPos) {
+                for (let i = prevPos; i <= currentPos; i++) {
+                    steps.push(i);
+                }
+
+            } else if (currentPos < prevPos) {
+                for (let i = prevPos; i < 20; i++) steps.push(i); // To end
+                for (let i = 0; i <= currentPos; i++) steps.push(i); // From start
+            } else {
+                steps.push(currentPos);
+            }
+
+            if (steps.length > 1) {
+                const getTargetForStep = (idx: number) => {
+                    const center = getSpaceCenter(idx);
+                    return { x: center.x + offset.x, y: center.y + offset.y };
+                };
+
+                const stepRandoms = steps.slice(1).map(() => Math.floor(Math.random() * 4) + 1);
+                const stepSounds = stepRandoms.map(idx => `slide${idx}`);
+                const stepDurations = stepSounds.map(s => Math.min(getSoundDuration(s), 0.4));
+
+                // Ensure non-zero total duration to avoid division by zero or instant animation
+                const totalDuration = stepDurations.reduce((a, b) => a + b, 0) || (steps.length - 1) * 0.2;
+
+                let accumulatedTime = 0;
+                const times = [0];
+                stepDurations.forEach(d => {
+                    accumulatedTime += d;
+                    times.push(Math.min(accumulatedTime / totalDuration, 1));
+                });
+
+                let currentDelay = 0;
+                stepSounds.forEach((sound, i) => {
+                    setTimeout(() => {
+                        addSound(sound);
+                    }, currentDelay * 1000);
+                    currentDelay += stepDurations[i];
+                });
+
+                controls.start({
+                    x: steps.map(s => getTargetForStep(s).x),
+                    y: steps.map(s => getTargetForStep(s).y),
+                    transition: {
+                        duration: totalDuration,
+                        ease: "easeInOut",
+                        times: times
+                    }
+                });
+            } else {
+                // Initial render or no move (just offset change?)
+                const center = getSpaceCenter(currentPos);
+                controls.start({
+                    x: center.x + offset.x,
+                    y: center.y + offset.y,
+                    transition: { duration: 0.5, ease: "easeInOut" }
+                });
+            }
+
+            prevPositionRef.current = currentPos;
+        } else {
+            // Position didn't change, but Offset might have!
+            const center = getSpaceCenter(currentPos);
+            controls.start({
+                x: center.x + offset.x,
+                y: center.y + offset.y,
+                transition: { duration: 0.5, ease: "easeInOut" }
+            });
+        }
+    }, [boardPosition, offset, controls, playerId, addSound]);
+
+    // Initial position for first render (no animation needed? Or animate from 0,0?)
+    // to avoid jump, we can set initial to the target.
+    const initialPos = useMemo(() => {
+        const center = getSpaceCenter(boardPosition);
+        return { x: center.x + offset.x, y: center.y + offset.y + 20 };
+    }, []); // Run once
+
+    return (
+        <motion.g
+            initial={initialPos}
+            animate={controls}
+        >
+            {/* Token Body - Donut */}
+            <circle
+                r={15}
+                fill="none"
+                stroke={color}
+                strokeWidth={10}
+                filter="url(#token-shadow)"
+            />
+        </motion.g>
+    );
+}
+
+
+export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes }: GameBoardProps) {
+    const [selectedCity, setSelectedCity] = useState<City | null>(null);
+    const [hoveredSpace, setHoveredSpace] = useState<{ type: SpaceType; cost: number; x: number; y: number } | null>(null);
+
+
+    const { addSound, getSoundDuration } = useGameSounds();
+    const prevGameStateRef = useRef<GameState | null>(null);
+
+    useEffect(() => {
+        if (!gameState) return;
+
+        const prevGameState = prevGameStateRef.current;
+
+        // Update ref immediately if it's the first run, but don't play sounds
+        if (!prevGameState) {
+            prevGameStateRef.current = JSON.parse(JSON.stringify(gameState));
+            return;
+        }
+
+        const soundsToQueue: string[] = [];
+
+        // 1. Check for piece movement (slide)
+        // Handled by PlayerToken component for visual sync
+
+        // 2. Check for track changes (build / riot)
+        gameState.routes.forEach((route) => {
+            const prevRoute = prevGameState.routes.find(r =>
+                (r.cityPair.city1 === route.cityPair.city1 && r.cityPair.city2 === route.cityPair.city2) ||
+                (r.cityPair.city1 === route.cityPair.city2 && r.cityPair.city2 === route.cityPair.city1)
+            );
+
+            const prevTracks = prevRoute ? prevRoute.numTracks : 0;
+            if (route.numTracks > prevTracks) {
+                soundsToQueue.push('build');
+            } else if (route.numTracks < prevTracks) {
+                soundsToQueue.push('riot');
+            }
+        });
+
+        // 3. Check for money increase (cash)
+        Object.entries(gameState.players).forEach(([pId, pState]) => {
+            const prevPState = prevGameState.players[pId];
+            if (prevPState && pState.money !== prevPState.money) {
+                soundsToQueue.push('cash');
+            }
+        });
+
+        // Queue signals
+        soundsToQueue.forEach(sound => addSound(sound));
+
+        // Update Ref
+        prevGameStateRef.current = JSON.parse(JSON.stringify(gameState));
+    }, [gameState, addSound]);
 
     const playerGroups = useMemo(() => {
         const groups: Record<number, string[]> = {};
@@ -129,83 +388,6 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
         };
     };
 
-    // --- Helper to calculate Space Geometry ---
-    const getSpaceGeometry = (index: number) => {
-        let x = 0, y = 0, w = 0, h = 0;
-        let isCorner = false;
-
-        const left = BOARD_PADDING;
-        const top = BOARD_PADDING;
-        const right = VIEWBOX_WIDTH - BOARD_PADDING;
-        const bottom = VIEWBOX_HEIGHT - BOARD_PADDING;
-
-        if (index === 0) { // Bottom Right (GO)
-            isCorner = true;
-            x = right - CORNER_SIZE;
-            y = bottom - CORNER_SIZE;
-            w = CORNER_SIZE;
-            h = CORNER_SIZE;
-        } else if (index >= 1 && index <= 5) { // Bottom Edge
-            const offset = index - 1;
-            x = (right - CORNER_SIZE) - (offset + 1) * SPACE_WIDTH_H;
-            y = bottom - CORNER_SIZE + CORNER_PADDING;
-            w = SPACE_WIDTH_H;
-            h = CORNER_SIZE - CORNER_PADDING;
-        } else if (index === 6) { // Bottom Left
-            isCorner = true;
-            x = left;
-            y = bottom - CORNER_SIZE;
-            w = CORNER_SIZE;
-            h = CORNER_SIZE;
-        } else if (index >= 7 && index <= 9) { // Left Edge
-            const offset = index - 7;
-            x = left;
-            y = (bottom - CORNER_SIZE) - (offset + 1) * SPACE_HEIGHT_V;
-            w = CORNER_SIZE - CORNER_PADDING;
-            h = SPACE_HEIGHT_V;
-        } else if (index === 10) { // Top Left
-            isCorner = true;
-            x = left;
-            y = top;
-            w = CORNER_SIZE;
-            h = CORNER_SIZE;
-        } else if (index >= 11 && index <= 15) { // Top Edge
-            const offset = index - 11;
-            x = left + CORNER_SIZE + (offset * SPACE_WIDTH_H);
-            y = top;
-            w = SPACE_WIDTH_H;
-            h = CORNER_SIZE - CORNER_PADDING;
-        } else if (index === 16) { // Top Right
-            isCorner = true;
-            x = right - CORNER_SIZE;
-            y = top;
-            w = CORNER_SIZE;
-            h = CORNER_SIZE;
-        } else if (index >= 17 && index <= 19) { // Right Edge
-            const offset = index - 17;
-            x = right - CORNER_SIZE + CORNER_PADDING;
-            y = top + CORNER_SIZE + (offset * SPACE_HEIGHT_V);
-            w = CORNER_SIZE - CORNER_PADDING;
-            h = SPACE_HEIGHT_V;
-        }
-
-        return {
-            x: x + SPACE_GAP,
-            y: y + SPACE_GAP,
-            width: w - (SPACE_GAP * 2),
-            height: h - (SPACE_GAP * 2),
-            isCorner
-        };
-    };
-
-    const getSpaceCenter = (index: number) => {
-        const { x, y, width, height } = getSpaceGeometry(index);
-        return {
-            x: x + width / 2,
-            y: y + height / 2
-        };
-    };
-
     const getPlayerColor = (playerId: string) => {
         const index = players.findIndex(p => p.id === playerId);
         if (index === -1) return "#ffffff";
@@ -217,7 +399,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
             <div className="flex-1 relative flex items-center justify-center p-4">
                 <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-                    className="w-[80%] h-[80%] max-w-[80vw] max-h-[80vh] select-none shadow-2xl bg-zinc-900/50 rounded-xl border border-zinc-800"
+                    className="w-[80%] h-[80%] max-w-[80vw] max-h-[80vh] select-none shadow-2xl bg-[#dadabfff] rounded-xl border border-stone-400"
                     preserveAspectRatio="xMidYMid meet"
                 >
                     {/* --- Helper Definitions (Gradients, Filters) --- */}
@@ -236,24 +418,25 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
 
                     {/* --- Routes (Tracks) --- */}
                     <g className="routes">
-                        {VALID_CITY_PAIRS.map(([c1, c2], idx) => {
-                            const p1 = getCityPos(c1);
-                            const p2 = getCityPos(c2);
-                            const isHovered = hoveredElement === `route-${idx}`;
-                            const isValid = isRouteValid(c1, c2);
+                        {VALID_CITY_PAIRS.map((cities, idx) => {
+                            const p1 = getCityPos(cities.city1);
+                            const p2 = getCityPos(cities.city2);
 
+                            const routeIndex = validRoutes.findIndex(route => {
+                                return route.cityPair.city1 === cities.city1 && route.cityPair.city2 === cities.city2
+                            });
+                            const isValid = routeIndex !== -1;
                             return (
                                 <g
                                     key={`route-${idx}`}
-                                    onMouseEnter={() => setHoveredElement(`route-${idx}`)}
-                                    onMouseLeave={() => setHoveredElement(null)}
                                     onClick={() => {
-                                        console.log(`Clicked Route: ${City[c1]} <-> ${City[c2]}`)
+                                        console.log("clicked route", [cities.city1, cities.city2]);
+                                        console.log(validRoutes);
                                         if (isValid && onRouteSelect) {
-                                            onRouteSelect([c1, c2]);
+                                            onRouteSelect(validRoutes[routeIndex]);
                                         }
                                     }}
-                                    className={`transition-all duration-300 ${isValid ? "cursor-pointer" : "cursor-not-allowed opacity-30"}`}
+                                    className={`group transition-all duration-300`}
                                 >
                                     {/* Invisible thick line for easier clicking */}
                                     <line
@@ -264,10 +447,82 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     {/* Visible Line */}
                                     <line
                                         x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                                        stroke={isHovered ? "#fbbf24" : "#71717a"}
-                                        strokeWidth={isHovered ? 6 : 3}
-                                        className="transition-colors duration-200"
+                                        stroke={isValid ? "#fbbf24" : "#71717a"}
+                                        strokeWidth={isValid ? 3 : 3}
+                                        className={`transition-all duration-200 ${isValid ? 'group-hover:stroke-[6px]' : ''}`}
                                     />
+                                    {/* Built Track Segments */}
+                                    {(() => {
+                                        // Find the route in gameState to get numTracks
+                                        const gameRoute = gameState?.routes.find(r =>
+                                            (r.cityPair.city1 === cities.city1 && r.cityPair.city2 === cities.city2) ||
+                                            (r.cityPair.city1 === cities.city2 && r.cityPair.city2 === cities.city1)
+                                        );
+                                        const numTracks = gameRoute?.numTracks || 0;
+
+                                        if (numTracks === 0) return null;
+
+                                        const isReversed = p1.x > p2.x;
+                                        const start = isReversed ? p2 : p1;
+                                        const end = isReversed ? p1 : p2;
+
+                                        const dx = end.x - start.x;
+                                        const dy = end.y - start.y;
+
+                                        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                                        const dist = Math.sqrt(dx * dx + dy * dy);
+                                        const segLen = dist / 4;
+
+                                        return Array.from({ length: numTracks }).map((_, tIdx) => {
+                                            const t = (tIdx + 0.5) / 4.0;
+                                            const cx = start.x + dx * t;
+                                            const cy = start.y + dy * t;
+
+                                            const w = segLen + 1;
+                                            const h = 8; // Width of the track piece
+
+                                            // Ladder Style Track
+                                            const railWidth = 5;
+                                            const tieWidth = 5;
+                                            const railColor = "#451a03"; // Dark Brown
+                                            const tieColor = "#451a03"; // Dark Brown
+                                            return (
+                                                <g
+                                                    key={`track-${idx}-${tIdx}`}
+                                                    transform={`translate(${cx}, ${cy}) rotate(${angle})`}
+                                                    className={`transition-all duration-100 pointer-events-none group-hover:brightness-150`}
+                                                >
+                                                    {/* Sleeper Ties (3 per segment) */}
+                                                    {[-0.25, 0, 0.25].map((offset, i) => (
+                                                        <rect
+                                                            key={i}
+                                                            x={(w * offset) - (tieWidth / 2)}
+                                                            y={-h}
+                                                            width={tieWidth}
+                                                            height={h * 2}
+                                                            fill={tieColor}
+                                                        />
+                                                    ))}
+
+                                                    {/* Rails (Top and Bottom) */}
+                                                    <rect
+                                                        x={-w / 2}
+                                                        y={(-h / 2) + 10}
+                                                        width={w}
+                                                        height={railWidth}
+                                                        fill={railColor}
+                                                    />
+                                                    <rect
+                                                        x={-w / 2}
+                                                        y={(h / 2) - railWidth - 10}
+                                                        width={w}
+                                                        height={railWidth}
+                                                        fill={railColor}
+                                                    />
+                                                </g>
+                                            );
+                                        });
+                                    })()}
                                 </g>
                             );
                         })}
@@ -278,33 +533,30 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                         {Object.keys(CITY_COORDS).map((key) => {
                             const city = parseInt(key) as City;
                             const pos = getCityPos(city);
-                            const isHovered = hoveredElement === `city-${key}`;
+
 
                             return (
                                 <g
                                     key={`city-${key}`}
-                                    onMouseEnter={() => setHoveredElement(`city-${key}`)}
-                                    onMouseLeave={() => setHoveredElement(null)}
-                                    onClick={() => console.log(`Clicked City: ${City[city]}`)}
-                                    className="cursor-pointer"
+                                    onClick={() => setSelectedCity(city)}
+                                    className="cursor-pointer group"
                                     style={{ transformOrigin: `${pos.x}px ${pos.y}px` }}
                                 >
                                     <circle
                                         cx={pos.x}
                                         cy={pos.y}
-                                        r={isHovered ? CITY_RADIUS * 1.2 : CITY_RADIUS}
-                                        fill="#09090b"
-                                        stroke={isHovered ? "#fbbf24" : "#f59e0b"}
-                                        strokeWidth={isHovered ? 3 : 2}
-                                        className="transition-all duration-200"
+                                        r={CITY_RADIUS}
+                                        stroke={CITY_COLORS[city]}
+                                        strokeWidth={6}
+                                        className="transition-all duration-200 group-hover:stroke-[10px]"
                                     />
                                     <text
                                         x={pos.x}
                                         y={pos.y - CITY_RADIUS - 12}
                                         textAnchor="middle"
-                                        fill={isHovered ? "#fbbf24" : "#f59e0b"}
-                                        className="text-sm font-bold uppercase pointer-events-none transition-all duration-200"
-                                        style={{ fontSize: isHovered ? '22px' : '20px', fontWeight: 'bold' }}
+                                        fill={CITY_COLORS[city]}
+                                        className="text-sm font-bold uppercase pointer-events-none transition-all duration-200 tracking-wider group-hover:text-[22px]"
+                                        style={{ fontSize: '20px', fontWeight: 'bold' }}
                                     >
                                         {City[city]}
                                     </text>
@@ -317,49 +569,64 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                     <g className="spaces">
                         {SPACES.map((space, index) => {
                             const { x, y, width, height, isCorner } = getSpaceGeometry(index);
-                            const isHovered = hoveredElement === `space-${index}`;
+
                             const label = SpaceType[space.type].replace(/([A-Z])/g, ' $1').trim();
 
                             return (
                                 <g
                                     key={index}
                                     transform={`translate(${x}, ${y})`}
-                                    onMouseEnter={() => setHoveredElement(`space-${index}`)}
-                                    onMouseLeave={() => setHoveredElement(null)}
                                     onClick={() => console.log(`Clicked Space: ${label}`)}
-                                    className="cursor-pointer"
+                                    className="cursor-pointer group"
+                                    style={{ transition: 'opacity 0.2s' }}
                                 >
                                     <rect
                                         width={width}
                                         height={height}
                                         fill={SPACE_COLORS[SPACES[index].type]}
-                                        stroke={isHovered ? "#fbbf24" : "#52525b"}
-                                        strokeWidth={isHovered ? 3 : 1}
-                                        className="transition-all duration-200 hover:filter-brightness-110"
+                                        stroke={"#52525b"}
+                                        strokeWidth={1}
+                                        className="transition-all duration-200 hover:filter-brightness-110 group-hover:stroke-[#fbbf24] group-hover:stroke-[3px]"
                                     />
                                     <text
                                         x={width / 2}
-                                        y={height / 2 - (space.cost > 0 ? 8 : 0)}
+                                        y={height / 5}
                                         textAnchor="middle"
                                         dominantBaseline="middle"
                                         fill="#f1f1f5ff"
                                         style={{
                                             fontSize: isCorner ? '24px' : '22px',
-                                            fontWeight: 'normal',
                                         }}
-                                        className="pointer-events-none"
+                                        className="pointer-events-none tracking-wider"
                                         filter="url(#text-shadow)"
                                     >
-                                        {label === "Go" ? "GO" : label}
+                                        {label}
                                     </text>
+                                    <rect
+                                        x={0}
+                                        y={0}
+                                        width={width}
+                                        height={height}
+                                        fill="transparent"
+                                        onMouseEnter={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setHoveredSpace({
+                                                type: space.type,
+                                                cost: space.cost,
+                                                x: rect.left + rect.width / 2,
+                                                y: rect.top
+                                            });
+                                        }}
+                                        onMouseLeave={() => setHoveredSpace(null)}
+                                    />
                                     {space.cost > 0 && (
                                         <text
                                             x={width / 2}
-                                            y={height / 2 + 14}
+                                            y={height / 2 + 40}
                                             textAnchor="middle"
                                             dominantBaseline="middle"
-                                            fill="#f59e0b"
-                                            style={{ fontSize: '20px' }}
+                                            fill="#ffcc00ff"
+                                            style={{ fontSize: '24px' }}
                                             className="pointer-events-none"
                                             filter="url(#text-shadow)"
                                         >
@@ -375,44 +642,79 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                     {gameState && gameState.players && (
                         <g className="players">
                             {Object.entries(gameState.players).map(([pId, pState]) => {
-                                const spaceCenter = getSpaceCenter(pState.boardPosition);
                                 const group = playerGroups[pState.boardPosition] || [];
                                 const index = group.indexOf(pId);
                                 const offset = getPlayerOffset(index, group.length);
-
-                                const finalX = spaceCenter.x + offset.x;
-                                const finalY = spaceCenter.y + offset.y;
-
                                 const color = getPlayerColor(pId);
 
                                 return (
-                                    <g
+                                    <PlayerToken
                                         key={pId}
-                                        style={{ transform: `translate(${finalX}px, ${finalY}px)` }}
-                                        className="transition-all duration-500"
-                                    >
-
-
-                                        {/* Token Body - Donut */}
-                                        <circle
-                                            r={15}
-                                            fill="none"
-                                            stroke={color}
-                                            strokeWidth={10}
-                                            filter="url(#token-shadow)"
-                                        />
-                                    </g>
+                                        playerId={pId}
+                                        color={color}
+                                        boardPosition={pState.boardPosition}
+                                        offset={offset}
+                                        addSound={addSound}
+                                        getSoundDuration={getSoundDuration}
+                                    />
                                 );
                             })}
                         </g>
                     )}
                 </svg>
             </div>
+            {/* City Property Modal */}
+            {
+                selectedCity !== null && createPortal(
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
+                        {/* Backdrop */}
+                        <div
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity"
+                            onClick={() => setSelectedCity(null)}
+                        />
 
-            {/* HUD / Footer */}
-            <div className="h-16 bg-zinc-900 border-t border-zinc-800 flex items-center justify-center px-6 z-10">
-                <p className="text-zinc-500 text-sm">gameState: {gameState ? gameState.toString() : "No"}</p>
-            </div>
-        </main>
+                        {/* Modal Content */}
+                        <div className="relative pointer-events-auto transform transition-all animate-in fade-in zoom-in-95 duration-200">
+                            <div className="transform scale-125">
+                                <PropertyCard
+                                    property={{ city: selectedCity, owner_PID: "" }}
+                                    index={0}
+                                    totalInStack={1}
+                                />
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )
+            }
+
+            {/* Space Tooltip */}
+            {createPortal(
+                <AnimatePresence>
+                    {hoveredSpace && (
+                        <motion.div
+                            key={`${hoveredSpace.x}-${hoveredSpace.y}`}
+                            initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
+                            animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
+                            exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
+                            transition={{ duration: 0.3 }}
+                            className="fixed z-[10000] pointer-events-none px-4 py-2 bg-zinc-900/90 text-white rounded-lg shadow-xl border border-zinc-700 backdrop-blur-sm max-w-xs text-center font-cute"
+                            style={{
+                                left: hoveredSpace.x,
+                                top: hoveredSpace.y - 10,
+                            }}
+                        >
+                            <p className="text-md font-medium">
+                                {SPACE_DESCRIPTIONS[hoveredSpace.type].replace("{cost}", `$${hoveredSpace.cost / 1000}k`)}
+                            </p>
+                            <div
+                                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-zinc-900/90"
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+        </main >
     );
 }

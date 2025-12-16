@@ -6,31 +6,24 @@ interface ActionBarProps {
 }
 
 const ACTION_LABELS: Record<number, string> = {
-    [ActionType.Move]: "Roll Dice",
-    [ActionType.Accept]: "Accept",
+    [ActionType.Roll]: "Roll Dice",
+    [ActionType.Ok]: "Ok",
     [ActionType.Pass]: "Pass",
     [ActionType.Trade]: "Trade",
+    [ActionType.Buy]: "Buy",
     // Rebellion and PlaceTrack are handelled inside the gameboard component
 };
 
 export default function ActionBar({ validActions, onActionSelect }: ActionBarProps) {
-    if (!validActions || validActions.length === 0) {
-        return null;
-    }
+    const visibleActions = validActions?.filter(action => ACTION_LABELS[action]) ?? [];
 
-    const displayedActions = validActions.filter(
-        (action) =>
-            action !== ActionType.Rebellion &&
-            action !== ActionType.PlaceTrack
-    );
-
-    if (displayedActions.length === 0) {
+    if (visibleActions.length === 0) {
         return null;
     }
 
     return (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 border border-zinc-700 rounded-full px-6 py-3 flex gap-4 shadow-2xl backdrop-blur-sm">
-            {displayedActions.map((action) => (
+            {visibleActions.map((action) => (
                 <button
                     key={action}
                     onClick={() => onActionSelect(action)}
@@ -42,7 +35,7 @@ export default function ActionBar({ validActions, onActionSelect }: ActionBarPro
                         transition-all duration-200
                     "
                 >
-                    {ACTION_LABELS[action] || ActionType[action]}
+                    {ACTION_LABELS[action]}
                 </button>
             ))}
         </div>

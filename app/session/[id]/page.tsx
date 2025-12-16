@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState } from "@/lib/api";
-import { SessionData, Player, GameState, City, createEmptyGameState, ActionType } from "@/types";
+import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState, selectAction } from "@/lib/api";
+import { SessionData, Player, GameState, City, createEmptyGameState, ActionType, Route } from "@/types";
 import { VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useSignalR } from "@/app/context/SignalRContext";
 import LobbyView from "@/app/components/LobbyView";
 import GameBoard from "@/app/components/GameBoard";
 import ActionBar from "@/app/components/ActionBar";
+import { PlayerInfoPanel } from "@/app/components/PlayerInfoPanel";
+import GameOverScreen from "@/app/components/GameOverScreen";
+
+const INFO_PANEL_POSITIONS = [
+    "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
+    "bottom-4 right-[15vw] translate-x-1/2", // Slot 1: Bottom Right
+    "top-1/2 right-4 -translate-y-1/2 origin-right",      // Slot 2: Right Edge
+    "top-4 right-[15vw] translate-x-1/2",     // Slot 3: Top Right
+    "top-4 left-[15vw] -translate-x-1/2",      // Slot 4: Top Left
+    "top-1/2 left-4 -translate-y-1/2 origin-left"        // Slot 5: Left Edge
+];
 
 
 export default function SessionPage() {
@@ -20,19 +31,27 @@ export default function SessionPage() {
     const [session, setSession] = useState<SessionData | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [gameState, setGameState] = useState<GameState>(createEmptyGameState());
-    const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+    const [clientPlayerId, setClientPlayerId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isStarting, setIsStarting] = useState(false);
+    const [validActions, setValidActions] = useState<ActionType[]>([]);
+    const [selectableRoutes, setSelectableRoutes] = useState<Route[]>([]);
+
+    // Use a ref to access the latest session in callbacks/effects without triggering re-runs
+    const sessionRef = useRef(session);
+    useEffect(() => {
+        sessionRef.current = session;
+    }, [session]);
 
     // Load current player ID from local storage
     useEffect(() => {
-        const storedId = localStorage.getItem("playerId");
+        const storedId = sessionStorage.getItem("playerId");
         if (!storedId) {
-            router.push("/");
+            router.push(`/?joinSession=${sessionId}`);
             return;
         }
-        setCurrentPlayerId(storedId);
+        setClientPlayerId(storedId);
     }, [router]);
 
 
@@ -46,22 +65,116 @@ export default function SessionPage() {
         }
     }, [sessionId]);
 
-    const fetchGameState = useCallback(async (boardId: string) => {
+    const addTestProperties = (state: GameState) => {
+        // Add test properties: give each player 2 of each property
+        const allCities = Object.values(City).filter(c => typeof c === 'number') as City[];
+        const playerIds = Object.keys(state.players);
+        const testProperties: { city: City; owner_PID: string }[] = [];
+
+        playerIds.forEach(pid => {
+            allCities.forEach(city => {
+                testProperties.push({ city, owner_PID: pid });
+                testProperties.push({ city, owner_PID: pid });
+            });
+        });
+
+        state.properties = testProperties;
+        return state
+    }
+
+    // Use a ref to access the latest gameState in callbacks/effects without triggering re-runs
+    const gameStateRef = useRef(gameState);
+    useEffect(() => {
+        gameStateRef.current = gameState;
+    }, [gameState]);
+
+    const fetchGameState = useCallback(async (boardId?: string) => {
         try {
-            const data = await getGameState(boardId);
+            const bid = boardId || sessionRef.current?.boardId;
+            if (!bid) return;
+
+            const data = await getGameState(bid);
             console.log("Game state:", data);
-            setGameState(data);
+
+            const currentValidActions = data.currentPlayerId === clientPlayerId ? data.validActions : [];
+            const nextSelectableRoutes = getValidRoutes(data, currentValidActions);
+
+            const currentGameState = gameStateRef.current;
+            let maxDelay = 0;
+            let hasPositionChange = false;
+
+            // Check for position changes
+            if (currentGameState && currentGameState.players && Object.keys(currentGameState.players).length > 0) {
+                Object.keys(data.players).forEach(pId => {
+                    const oldP = currentGameState.players[pId];
+                    const newP = data.players[pId];
+
+                    if (oldP && newP && oldP.boardPosition !== newP.boardPosition) {
+                        hasPositionChange = true;
+                        // Calculate steps for delay (Circular board of 20 spaces)
+                        // This logic matches GameBoard movement calculation
+                        const diff = (newP.boardPosition - oldP.boardPosition + 20) % 20;
+                        // Each step is max 0.5s. Adding small buffer.
+                        const duration = diff * 0.4 * 1000;
+                        if (duration > maxDelay) maxDelay = duration;
+                    }
+                });
+            }
+
+            if (hasPositionChange) {
+                setValidActions([]);
+                setSelectableRoutes([]);
+                // 1. Update ONLY positions first
+                const intermediateState = {
+                    ...currentGameState,
+                    players: { ...currentGameState.players }
+                };
+
+                // Update players to new positions, keep other data (money, etc) same as old
+                Object.keys(data.players).forEach(pId => {
+                    if (intermediateState.players[pId]) {
+                        intermediateState.players[pId] = {
+                            ...intermediateState.players[pId],
+                            boardPosition: data.players[pId].boardPosition
+                        };
+                    }
+                });
+
+                setGameState(intermediateState);
+
+                // 2. Wait for animation, then update the rest
+                // Adding 100ms buffer
+                setTimeout(() => {
+                    setGameState(data);
+                    setValidActions(currentValidActions);
+                    setSelectableRoutes(nextSelectableRoutes);
+                }, maxDelay);
+
+            } else {
+                setGameState(data);
+                setValidActions(currentValidActions);
+                setSelectableRoutes(nextSelectableRoutes);
+            }
         } catch (err: any) {
             console.error("Failed to fetch game state:", err);
-            // Don't set error here to avoid blocking the UI if just the game state fails
         }
-    }, []);
+    }, [clientPlayerId]);
+
+
+
+    const getOrderedPlayers = useCallback(() => {
+        if (!players || players.length === 0 || !clientPlayerId) return [];
+        const myIndex = players.findIndex(p => p.id === clientPlayerId);
+        if (myIndex === -1) return players;
+        return [...players.slice(myIndex), ...players.slice(0, myIndex)];
+    }, [players, clientPlayerId]);
 
     const fetchSessionData = useCallback(async (shouldHandleLoadingState = false) => {
         try {
             const sessionData = await getSession(sessionId);
             setSession(sessionData);
 
+            console.log('fetching session data', sessionData)
             // Fetch player details
             if (sessionData.playerIds && sessionData.playerIds.length > 0) {
                 // TODO: add get session player endpoint which can read from the sessionplayers junction table
@@ -72,6 +185,7 @@ export default function SessionPage() {
 
             // If game is started, fetch game state
             if (sessionData.startTime && sessionData.boardId) {
+                // Pass the boardId explicitly so we don't rely on the potentially stale (or soon to be updated) session state
                 fetchGameState(sessionData.boardId);
             }
 
@@ -100,8 +214,8 @@ export default function SessionPage() {
         if (!sessionId || !connection) return;
 
         // Join the SignalR group for this session
-        if (currentPlayerId) {
-            connection.invoke("JoinSession", sessionId, currentPlayerId)
+        if (clientPlayerId) {
+            connection.invoke("JoinSession", sessionId, clientPlayerId)
                 .catch((err) => console.error("Error joining SignalR session group:", err));
         }
 
@@ -121,36 +235,27 @@ export default function SessionPage() {
         };
 
         const onGameBoardUpdated = () => {
-            fetchGameState(sessionId);
-            // TODO: redraw the gameboard
-        }
-
-        const onYourTurn = (playerId: string, validActions: ActionType[]) => {
-            console.log("YourTurn event received");
-            if (playerId !== currentPlayerId) return;
-
-            // TODO: enable the action action bar
+            fetchGameState();
+            console.log("GameBoardUpdated event received");
         }
 
         connection.on("PlayerJoined", onPlayerJoined);
         connection.on("PlayerRemoved", onPlayerRemoved);
         connection.on("GameStarted", onGameStarted);
         connection.on("GameBoardUpdated", onGameBoardUpdated);
-        connection.on("YourTurn", onYourTurn);
         return () => {
             connection.off("PlayerJoined", onPlayerJoined);
             connection.off("PlayerRemoved", onPlayerRemoved);
             connection.off("GameStarted", onGameStarted);
             connection.off("GameBoardUpdated", onGameBoardUpdated);
-            connection.off("YourTurn", onYourTurn);
         };
-    }, [sessionId, connection, currentPlayerId, fetchPlayerList, fetchSessionData]);
+    }, [sessionId, connection, clientPlayerId, fetchPlayerList, fetchSessionData]);
 
     const handleStartGame = async () => {
-        if (!currentPlayerId) return;
+        if (!clientPlayerId) return;
         setIsStarting(true);
         try {
-            await startGame(sessionId, currentPlayerId);
+            await startGame(sessionId, clientPlayerId);
             // Refresh immediately
             fetchSessionData();
         } catch (err: any) {
@@ -161,24 +266,35 @@ export default function SessionPage() {
         }
     };
 
-    function getRebellionTargets() {
-        return gameState.routes.filter(route => route.numTracks > 0 && route.numTracks < 4);
+    const getRebellionTargets = (state: GameState): Route[] => {
+        console.log(state.routes);
+        return state.routes.filter(route => route.numTracks > 1 && route.numTracks < 4);
     }
 
-    function getBuildableRoutes() {
-        return gameState.routes.filter(route => route.numTracks < 4);
+    const getBuildableRoutes = (state: GameState): Route[] => {
+        return VALID_CITY_PAIRS.map(cityPair => {
+            // Compare by value since object references will differ
+            const existingRoute = state.routes.find(route =>
+                route.cityPair.city1 === cityPair.city1 && route.cityPair.city2 === cityPair.city2
+            );
+
+            return existingRoute ? (existingRoute.numTracks < 4 ? existingRoute : null) : { cityPair, numTracks: 0 };
+        }).filter((route): route is Route => route !== null);
     }
 
-    const getValidRoutes = useCallback(() => {
-        // TODO: Implement logic based on game state and current player
-        // For now, return all routes as valid to demonstrate selection
-        return VALID_CITY_PAIRS;
-    }, [gameState, currentPlayerId]);
-
-    const handleRouteSelect = (route: City[]) => {
-        console.log("Selected Route:", route.map(c => City[c]).join(" - "));
-        // TODO: Send action to server
+    const getValidRoutes = (state: GameState, actions: ActionType[]) => {
+        if (actions.includes(ActionType.Rebellion)) {
+            console.log("targets", getRebellionTargets(state));
+            return getRebellionTargets(state);
+        }
+        if (actions.includes(ActionType.PlaceTrack)) {
+            return getBuildableRoutes(state);
+        }
+        // console.log(actions);
+        return [];
     };
+
+
 
     if (isLoading) {
         return (
@@ -199,8 +315,19 @@ export default function SessionPage() {
 
     if (!session) return null;
 
-    const isHost = !!(session.playerIds && session.playerIds.length > 0 && session.playerIds[0] === currentPlayerId);
+    const isHost = !!(session.playerIds && session.playerIds.length > 0 && session.playerIds[0] === clientPlayerId);
     const hasGameStarted = !!session.startTime;
+
+    // Check for game over state and render the screen if true
+    if (gameState.isGameOver) {
+        return (
+            <GameOverScreen
+                players={players}
+                playerStates={gameState.players}
+                onReturnHome={() => router.push("/")}
+            />
+        );
+    }
 
     if (hasGameStarted) {
         return (
@@ -208,16 +335,57 @@ export default function SessionPage() {
                 <GameBoard
                     session={session}
                     players={players}
-                    currentPlayerId={currentPlayerId}
+                    currentPlayerId={clientPlayerId}
                     gameState={gameState}
-                    onRouteSelect={handleRouteSelect}
-                    validRoutes={getValidRoutes()}
+                    onRouteSelect={(async (route: Route) => {
+                        console.log("Selected Route:", route.cityPair);
+                        if (!session || !clientPlayerId) return;
+                        await selectAction(session.boardId, clientPlayerId, gameState.validActions[0], route.cityPair);
+                    })}
+                    validRoutes={selectableRoutes}
                 />
+
+                {getOrderedPlayers().map((p, index) => {
+                    if (index >= INFO_PANEL_POSITIONS.length) return null;
+
+                    const pState = gameState.players[p.id];
+                    if (!pState) return null;
+
+                    const playerProperties = gameState.properties.filter(prop => prop.owner_PID === p.id);
+
+                    return (
+                        <PlayerInfoPanel
+                            key={p.id}
+                            player={p}
+                            money={pState.money}
+                            properties={playerProperties}
+                            screenPosition={INFO_PANEL_POSITIONS[index]}
+                            isClient={p.id === clientPlayerId}
+                        />
+                    );
+                })}
+
                 <ActionBar
-                    validActions={[ActionType.Move, ActionType.Pass, ActionType.Trade]} // TODO: Replace with dynamic valid actions based on game state
-                    onActionSelect={(action) => console.log("Selected Action:", ActionType[action])}
+                    validActions={validActions}
+                    onActionSelect={(async (action: ActionType) => {
+                        if (!session || !connection || !clientPlayerId) return;
+                        await selectAction(session.boardId, clientPlayerId, action)
+                            .catch((err) => console.error("Error selecting action:", err));
+
+                    })}
                 />
             </>
+        );
+    }
+
+    // Check for game over state and render the screen if true
+    if (gameState.isGameOver) {
+        return (
+            <GameOverScreen
+                players={players}
+                playerStates={gameState.players}
+                onReturnHome={() => router.push("/")}
+            />
         );
     }
 
@@ -225,7 +393,7 @@ export default function SessionPage() {
         <LobbyView
             sessionId={sessionId}
             players={players}
-            currentPlayerId={currentPlayerId}
+            currentPlayerId={clientPlayerId}
             isHost={isHost}
             isStarting={isStarting}
             onStartGame={handleStartGame}

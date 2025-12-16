@@ -1,17 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createPlayer, createSession, joinSession } from "@/lib/api";
 import { useSignalR } from "@/app/context/SignalRContext";
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const joinSessionId = searchParams.get("joinSession");
+
   const [name, setName] = useState("");
-  const [sessionIdToJoin, setSessionIdToJoin] = useState("");
+  const [sessionIdToJoin, setSessionIdToJoin] = useState(joinSessionId || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { connection } = useSignalR();
+
+  // Update session ID if URL param changes
+  useEffect(() => {
+    if (joinSessionId) {
+      setSessionIdToJoin(joinSessionId);
+    }
+  }, [joinSessionId]);
+
+  // Clear session data when returning to homepage
+  useEffect(() => {
+    sessionStorage.removeItem("playerId");
+    sessionStorage.removeItem("playerName");
+  }, []);
 
   const handleCreateSessionButton = async () => {
     if (!name.trim()) {
@@ -24,8 +40,8 @@ export default function Home() {
       const player = await createPlayer(name);
       const session = await createSession(player.id);
 
-      localStorage.setItem("playerId", player.id);
-      localStorage.setItem("playerName", name);
+      sessionStorage.setItem("playerId", player.id);
+      sessionStorage.setItem("playerName", name);
 
       router.push(`/session/${session.id}`);
     } catch (err: any) {
@@ -51,8 +67,8 @@ export default function Home() {
       const player = await createPlayer(name);
       await joinSession(sessionIdToJoin, player.id);
 
-      localStorage.setItem("playerId", player.id);
-      localStorage.setItem("playerName", name);
+      sessionStorage.setItem("playerId", player.id);
+      sessionStorage.setItem("playerName", name);
 
       router.push(`/session/${sessionIdToJoin}`);
     } catch (err: any) {
@@ -62,6 +78,8 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
+  const isJoinFlow = !!joinSessionId;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-black text-white p-4">
@@ -95,42 +113,59 @@ export default function Home() {
           </div>
 
           <div className="space-y-4 pt-2">
-            <button
-              onClick={handleCreateSessionButton}
-              disabled={isLoading}
-              className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Processing..." : "Create New Session"}
-            </button>
+            {!isJoinFlow && (
+              <>
+                <button
+                  onClick={handleCreateSessionButton}
+                  disabled={isLoading}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? "Processing..." : "Create New Session"}
+                </button>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-800"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-zinc-900 text-zinc-500">Or join existing session</span>
-              </div>
-            </div>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-zinc-800"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-zinc-900 text-zinc-500">Or join existing session</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
-              <input
-                type="text"
-                value={sessionIdToJoin}
-                onChange={(e) => setSessionIdToJoin(e.target.value)}
-                placeholder="Session ID"
-                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-600"
-              />
+              {!isJoinFlow && (
+                <input
+                  type="text"
+                  value={sessionIdToJoin}
+                  onChange={(e) => setSessionIdToJoin(e.target.value)}
+                  placeholder="Session ID"
+                  className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-600"
+                />
+              )}
               <button
                 onClick={handleJoinSessionButton}
                 disabled={isLoading}
-                className="w-full py-3.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-lg border border-zinc-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full py-3.5 px-4 font-semibold rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${isJoinFlow
+                  ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-lg shadow-orange-900/20"
+                  : "bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
+                  }`}
               >
-                Join Session
+                {isLoading ? "Processing..." : (isJoinFlow ? "Join Session" : "Join Session")}
               </button>
             </div>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

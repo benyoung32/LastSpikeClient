@@ -1,4 +1,4 @@
-import { City, SpaceType } from "@/types";
+import { City, SpaceType, CityPair } from "@/types";
 
 export interface SpaceDef {
     type: SpaceType;
@@ -40,17 +40,17 @@ export const CITY_VALUES: Record<City, number[]> = {
     [City.Winnipeg]: [0, 4000, 10000, 18000, 28000, 40000]
 };
 
-export const VALID_CITY_PAIRS: [City, City][] = [
-    [City.Montreal, City.Toronto],
-    [City.Montreal, City.Sudbury],
-    [City.Toronto, City.Winnipeg],
-    [City.Toronto, City.Regina],
-    [City.Sudbury, City.Saskatoon],
-    [City.Sudbury, City.Winnipeg],
-    [City.Winnipeg, City.Calgary],
-    [City.Winnipeg, City.Edmonton],
-    [City.Regina, City.Calgary],
-    [City.Saskatoon, City.Edmonton],
-    [City.Calgary, City.Vancouver],
-    [City.Edmonton, City.Vancouver]
+export const VALID_CITY_PAIRS: CityPair[] = [
+    { city1: City.Montreal, city2: City.Toronto },
+    { city1: City.Montreal, city2: City.Sudbury },
+    { city1: City.Toronto, city2: City.Winnipeg },
+    { city1: City.Toronto, city2: City.Regina },
+    { city1: City.Sudbury, city2: City.Saskatoon },
+    { city1: City.Sudbury, city2: City.Winnipeg },
+    { city1: City.Winnipeg, city2: City.Calgary },
+    { city1: City.Winnipeg, city2: City.Edmonton },
+    { city1: City.Regina, city2: City.Calgary },
+    { city1: City.Saskatoon, city2: City.Edmonton },
+    { city1: City.Calgary, city2: City.Vancouver },
+    { city1: City.Edmonton, city2: City.Vancouver }
 ];
