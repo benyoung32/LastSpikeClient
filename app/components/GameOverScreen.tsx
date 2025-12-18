@@ -22,7 +22,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, 
     rankedPlayers.sort((a, b) => b.money - a.money);
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 text-white animate-fade-in">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 text-white animate-slow-fade-in">
             <h1 className="text-6xl font-black mb-12 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-600">
                 GAME OVER
             </h1>

@@ -41,6 +41,8 @@ export default function SessionPage() {
     const [selectableRoutes, setSelectableRoutes] = useState<Route[]>([]);
     const [isTradeWindowOpen, setIsTradeWindowOpen] = useState(false);
     const [isProcessingAction, setIsProcessingAction] = useState(false);
+    const [gameOverAnimationPlaying, setGameOverAnimationPlaying] = useState(false);
+    const [gameOverScreenVisible, setGameOverScreenVisible] = useState(false);
     const { addSound } = useGameSounds();
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
@@ -135,17 +137,6 @@ export default function SessionPage() {
                     dice1: data.dice1,
                     dice2: data.dice2
                 };
-
-                // // Update players to new positions, keep other data (money, etc) same as old
-                // Object.keys(data.players).forEach(pId => {
-                //     if (intermediateState.players[pId]) {
-                //         intermediateState.players[pId] = {
-                //             ...intermediateState.players[pId],
-                //             boardPosition: data.players[pId].boardPosition
-                //         };
-                //     }
-                // });
-
                 setGameState(intermediateState);
 
                 // 2. Wait for animation, then update the rest
@@ -196,6 +187,18 @@ export default function SessionPage() {
 
         prevTurnInfo.current = currentTurnInfo;
     }, [gameState, clientPlayerId, addSound]);
+
+    // Game Over Animation Effect
+    useEffect(() => {
+        if (gameState.isGameOver) {
+            setGameOverAnimationPlaying(true);
+            const timer = setTimeout(() => {
+                setGameOverAnimationPlaying(false);
+                setGameOverScreenVisible(true);
+            }, 10000); // 10 seconds
+            return () => clearTimeout(timer);
+        }
+    }, [gameState.isGameOver]);
 
 
 
@@ -363,8 +366,8 @@ export default function SessionPage() {
     const isHost = !!(session.playerIds && session.playerIds.length > 0 && session.playerIds[0] === clientPlayerId);
     const hasGameStarted = !!session.startTime;
 
-    // Check for game over state and render the screen if true
-    if (gameState.isGameOver) {
+    // Show Game Over Screen ONLY if visible (after animation)
+    if (gameOverScreenVisible) {
         return (
             <GameOverScreen
                 players={players}
@@ -388,6 +391,7 @@ export default function SessionPage() {
                         await selectAction(session.boardId, clientPlayerId, gameState.validActions[0], route.cityPair);
                     })}
                     validRoutes={selectableRoutes}
+                    highlightWinningPath={gameOverAnimationPlaying}
                 />
 
                 {(() => {
@@ -507,15 +511,7 @@ export default function SessionPage() {
     }
 
     // Check for game over state and render the screen if true
-    if (gameState.isGameOver) {
-        return (
-            <GameOverScreen
-                players={players}
-                playerStates={gameState.players}
-                onReturnHome={() => router.push("/")}
-            />
-        );
-    }
+
 
     return (
         <LobbyView

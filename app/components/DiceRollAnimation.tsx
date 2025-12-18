@@ -9,11 +9,6 @@ interface DiceRollAnimationProps {
     dice2: number;
 }
 
-const pipVariants = {
-    hidden: { opacity: 0, scale: 0 },
-    visible: { opacity: 1, scale: 1 }
-};
-
 // Standard Dice Pip Layouts
 const PIPS: Record<number, number[]> = {
     1: [4],
@@ -53,7 +48,7 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
     const controls1 = useAnimation();
     const controls2 = useAnimation();
     const { addSound } = useGameSounds();
-    const [visible, setVisible] = useState(false);
+    // visible state removed as it was unused
     const [displayVal1, setDisplayVal1] = useState(1);
     const [displayVal2, setDisplayVal2] = useState(1);
 
@@ -61,10 +56,21 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
     const prevDiceRef = useRef<{ d1: number, d2: number }>({ d1: 0, d2: 0 });
     const [isRolling, setIsRolling] = useState(false);
 
+    // Ref to hold the fade-out timer so we can cancel it if props change
+    const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // 1. Trigger Animation Effect
     useEffect(() => {
+        // Cleanup previous timer if any
+        if (fadeTimerRef.current) {
+            clearTimeout(fadeTimerRef.current);
+            fadeTimerRef.current = null;
+        }
+
         if (dice1 === 0 && dice2 === 0) {
-            setVisible(false);
+            // If cleared, hide immediately
+            controls1.set({ opacity: 0 });
+            controls2.set({ opacity: 0 });
             return;
         }
 
@@ -73,16 +79,13 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
         controls1.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
         controls2.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
 
-        setVisible(true);
         setIsRolling(true);
-        prevDiceRef.current = { d1: dice1, d2: dice2 }; // No longer needed for logic, keeping if we want to track for other reasons? No.
+        prevDiceRef.current = { d1: dice1, d2: dice2 };
 
         const rollDice = async () => {
             addSound('dice');
             // ... animation logic ...
-            // Reset State
-            controls1.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
-            controls2.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
+            // Reset State - ensure we start from the random position set above
 
             var x1 = (Math.random() - 0.5) * 300;
             var y1 = (Math.random() - 0.5) * 300;
@@ -97,7 +100,7 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
                     rotate: Math.random() * 720 + 360,
                     scale: 1,
                     opacity: 1,
-                    transition: { duration: 0.75, type: "spring", damping: 15, stiffness: 40 }
+                    transition: { duration: 0.35, type: "spring", damping: 15, stiffness: 40 }
                 }),
                 controls2.start({
                     x: x2,
@@ -105,7 +108,7 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
                     rotate: Math.random() * 720 + 360,
                     scale: 1,
                     opacity: 1,
-                    transition: { duration: 0.75, type: "spring", damping: 15, stiffness: 40 }
+                    transition: { duration: 0.5, type: "spring", damping: 15, stiffness: 40 }
                 })
             ]);
 
@@ -121,15 +124,21 @@ export const DiceRollAnimation = ({ dice1, dice2 }: DiceRollAnimationProps) => {
             ]);
 
             // Fade Out
-            setTimeout(async () => {
+            fadeTimerRef.current = setTimeout(async () => {
                 await Promise.all([
                     controls1.start({ opacity: 0, scale: 0.9, transition: { duration: 0.5 } }),
                     controls2.start({ opacity: 0, scale: 0.9, transition: { duration: 0.5 } })
                 ]);
-            }, 2500);
+            }, 1000);
         };
 
         rollDice();
+
+        return () => {
+            if (fadeTimerRef.current) {
+                clearTimeout(fadeTimerRef.current);
+            }
+        };
     }, [dice1, dice2, controls1, controls2]);
 
     // 2. Value Scrambling Effect (Robust Loop)

@@ -16,6 +16,7 @@ interface GameBoardProps {
     gameState: GameState | null;
     onRouteSelect: (route: Route) => void;
     validRoutes: Route[];
+    highlightWinningPath?: boolean;
 }
 
 // Layout Constants for Internal SVG Coordinate System (1600x900)
@@ -276,14 +277,46 @@ const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, ge
             initial={initialPos}
             animate={controls}
         >
-            {/* Token Body - Donut */}
-            <circle
-                r={15}
-                fill="none"
-                stroke={color}
-                strokeWidth={10}
-                filter="url(#token-shadow)"
-            />
+            {/* Token Body - 3D Cylinder with Hole */}
+            <g filter="url(#token-shadow)">
+                {/* Side/Body (Darker for depth) */}
+                <path
+                    d="M -20,0 L -20,16 A 20,18 0 0 0 20,16 L 20,0 Z"
+                    fill={color}
+                    stroke="none"
+                    style={{ filter: "brightness(0.75)" }}
+                />
+
+                {/* Inner Hole Depth (Darkest) */}
+                <ellipse
+                    cx={0}
+                    cy={0}
+                    rx={11}
+                    ry={9}
+                    fill={color}
+                    stroke="none"
+                    style={{ filter: "brightness(0.4)" }}
+                />
+
+                {/* Top Cap (Ring) */}
+                <path
+                    d="M -20,0 A 20,18 0 1 0 20,0 A 20,18 0 1 0 -20,0 Z M -11,0 A 11,9 0 1 0 11,0 A 11,9 0 1 0 -11,0 Z"
+                    fill={color}
+                    fillRule="evenodd"
+                    stroke="none"
+                />
+
+                {/* Optional Highlight on Ring */}
+                <ellipse
+                    cx={0}
+                    cy={-14}
+                    rx={11}
+                    ry={2}
+                    fill="white"
+                    fillOpacity={0.25}
+                    stroke="none"
+                />
+            </g>
         </motion.g>
     );
 }, (prev, next) => {
@@ -297,13 +330,66 @@ const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, ge
 });
 
 
-export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes }: GameBoardProps) {
+export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes, highlightWinningPath = false }: GameBoardProps) {
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
     const [hoveredSpace, setHoveredSpace] = useState<{ type: SpaceType; cost: number; x: number; y: number } | null>(null);
+    const [winningPath, setWinningPath] = useState<Route[]>([]);
 
 
     const { addSound, getSoundDuration } = useGameSounds();
     const prevGameStateRef = useRef<GameState | null>(null);
+
+    // Pathfinding Effect
+    useEffect(() => {
+        // DEBUG: Trace prop and state
+        console.log("GameBoard: highlightWinningPath changed to:", highlightWinningPath);
+
+        if (highlightWinningPath && gameState) {
+            console.log("GameBoard: Starting Pathfinding BFS...");
+            // BFS to find path from Vancouver to Montreal
+            const startCity = City.Vancouver;
+            const endCity = City.Montreal;
+
+            const queue: { city: City; path: Route[] }[] = [{ city: startCity, path: [] }];
+            const visited = new Set<City>();
+            visited.add(startCity);
+
+            let foundPath: Route[] = [];
+
+            while (queue.length > 0) {
+                const { city, path } = queue.shift()!;
+
+                if (city === endCity) {
+                    foundPath = path;
+                    console.log("GameBoard: Path Found!", path);
+                    break;
+                }
+
+                // Find connected routes
+                const connectedRoutes = gameState.routes.filter(r =>
+                    r.numTracks === 4 &&
+                    (r.cityPair.city1 === city || r.cityPair.city2 === city)
+                );
+
+                for (const route of connectedRoutes) {
+                    const nextCity = route.cityPair.city1 === city ? route.cityPair.city2 : route.cityPair.city1;
+                    if (!visited.has(nextCity)) {
+                        visited.add(nextCity);
+                        queue.push({ city: nextCity, path: [...path, route] });
+                    }
+                }
+            }
+
+            if (foundPath.length === 0) {
+                console.warn("GameBoard: No winning path found between Vancouver and Montreal.");
+            }
+
+            setWinningPath(foundPath);
+        } else {
+            console.log("GameBoard: highlightWinningPath is false or gameState missing. Clearing path.");
+            setWinningPath([]);
+        }
+    }, [highlightWinningPath, gameState]);
 
     useEffect(() => {
         if (!gameState) return;
@@ -577,7 +663,61 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                 </g>
                             );
                         })}
+
+                        {/* Winning Path Highlight - Rendered AFTER tracks to be on top */}
+                        {highlightWinningPath && winningPath.length > 0 && (
+                            <g className="winning-path-highlight">
+                                {(() => {
+                                    // Reconstruct path direction to animate from ends
+                                    let currentCity = City.Vancouver;
+                                    const totalSegments = winningPath.length;
+                                    const midpoint = totalSegments / 2;
+
+                                    return winningPath.map((route, idx) => {
+                                        // Determine direction: Current -> Next
+                                        const p1City = currentCity;
+                                        const p2City = route.cityPair.city1 === currentCity ? route.cityPair.city2 : route.cityPair.city1;
+
+                                        // Update for next iteration
+                                        currentCity = p2City;
+
+                                        // Logic for "Drawing from Ends"
+                                        // If we are in the second half, reverse the drawing direction (P2 -> P1)
+                                        // so it visually flows From End -> Middle
+                                        const isSecondHalf = idx >= midpoint;
+
+                                        const drawStart = isSecondHalf ? getCityPos(p2City) : getCityPos(p1City);
+                                        const drawEnd = isSecondHalf ? getCityPos(p1City) : getCityPos(p2City);
+
+                                        // Delay calculation Start -> Mid <- End
+                                        // Segments closer to ends have lower delay.
+                                        const distFromEnd = isSecondHalf ? (totalSegments - 1 - idx) : idx;
+                                        const delay = distFromEnd * 0.8; // 0.3s per segment
+
+                                        return (
+                                            <motion.line
+                                                key={`win-path-${idx}`}
+                                                x1={drawStart.x} y1={drawStart.y} x2={drawEnd.x} y2={drawEnd.y}
+                                                stroke="#fbbf24" // Gold
+                                                strokeWidth={25}
+                                                strokeLinecap="round"
+                                                initial={{ pathLength: 0, opacity: 0 }}
+                                                animate={{ pathLength: 1, opacity: 1 }}
+                                                transition={{
+                                                    duration: 2,
+                                                    delay: delay,
+                                                    ease: "easeOut",
+                                                    // No Repeat, stay visible
+                                                }}
+                                                style={{ filter: "drop-shadow(0 0 6px #fbbf24)" }}
+                                            />
+                                        );
+                                    });
+                                })()}
+                            </g>
+                        )}
                     </g>
+
 
                     {/* --- Cities --- */}
                     <g className="cities">
@@ -753,39 +893,43 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
             }
 
             {/* Space Tooltip */}
-            {createPortal(
-                <AnimatePresence>
-                    {hoveredSpace && (
-                        <motion.div
-                            key={`${hoveredSpace.x}-${hoveredSpace.y}`}
-                            initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
-                            animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
-                            exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
-                            transition={{ duration: 0.3 }}
-                            className="fixed z-[10000] pointer-events-none px-4 py-2 bg-zinc-900/90 text-white rounded-lg shadow-xl border border-zinc-700 backdrop-blur-sm max-w-xs text-center font-cute"
-                            style={{
-                                left: hoveredSpace.x,
-                                top: hoveredSpace.y - 10,
-                            }}
-                        >
-                            <p className="text-md font-medium">
-                                {SPACE_DESCRIPTIONS[hoveredSpace.type].replace("{cost}", `$${hoveredSpace.cost / 1000}k`)}
-                            </p>
-                            <div
-                                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-zinc-900/90"
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>,
-                document.body
-            )}
+            {
+                createPortal(
+                    <AnimatePresence>
+                        {hoveredSpace && (
+                            <motion.div
+                                key={`${hoveredSpace.x}-${hoveredSpace.y}`}
+                                initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
+                                animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
+                                exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
+                                transition={{ duration: 0.3 }}
+                                className="fixed z-[10000] pointer-events-none px-4 py-2 bg-zinc-900/90 text-white rounded-lg shadow-xl border border-zinc-700 backdrop-blur-sm max-w-xs text-center font-cute"
+                                style={{
+                                    left: hoveredSpace.x,
+                                    top: hoveredSpace.y - 10,
+                                }}
+                            >
+                                <p className="text-md font-medium">
+                                    {SPACE_DESCRIPTIONS[hoveredSpace.type].replace("{cost}", `$${hoveredSpace.cost / 1000}k`)}
+                                </p>
+                                <div
+                                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-zinc-900/90"
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>,
+                    document.body
+                )
+            }
             {/* Dice Animation Overlay */}
-            {gameState && (
-                <DiceRollAnimation
-                    dice1={gameState.dice1}
-                    dice2={gameState.dice2}
-                />
-            )}
+            {
+                gameState && (
+                    <DiceRollAnimation
+                        dice1={gameState.dice1}
+                        dice2={gameState.dice2}
+                    />
+                )
+            }
         </main >
     );
 }

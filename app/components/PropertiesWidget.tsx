@@ -184,7 +184,7 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({ properties, 
 
                     {properties.length === 0 && (
                         <div className="text-slate-500 font-cute text-sm mb-4 opacity-50">
-                            Empty
+                            No properties
                         </div>
                     )}
                 </div>
