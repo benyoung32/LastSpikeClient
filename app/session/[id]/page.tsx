@@ -40,6 +40,7 @@ export default function SessionPage() {
     const [validActions, setValidActions] = useState<ActionType[]>([]);
     const [selectableRoutes, setSelectableRoutes] = useState<Route[]>([]);
     const [isTradeWindowOpen, setIsTradeWindowOpen] = useState(false);
+    const [isProcessingAction, setIsProcessingAction] = useState(false);
     const { addSound } = useGameSounds();
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
@@ -87,6 +88,9 @@ export default function SessionPage() {
             const currentValidActions = (data.currentPlayerId === clientPlayerId ? data.validActions : []).map(a => Number(a)) as ActionType[];
             const nextSelectableRoutes = getValidRoutes(data, currentValidActions);
 
+            setValidActions([]);
+            setSelectableRoutes([]);
+
             const currentGameState = gameStateRef.current;
             let maxDelay = 0;
             let hasPositionChange = false;
@@ -124,8 +128,6 @@ export default function SessionPage() {
             }
 
             if (hasPositionChange) {
-                setValidActions([]);
-                setSelectableRoutes([]);
                 // 1. Update ONLY positions first
                 const intermediateState = {
                     ...currentGameState,
@@ -435,24 +437,28 @@ export default function SessionPage() {
                             ? `Waiting for ${players.find(p => p.id === gameState.currentPlayerId)?.name || 'Opponent'}...`
                             : undefined
                     }
-                    // Hide action bar if there is a pending trade for me (I must respond first)
-                    // The trade object in GameState: Player2Id is the receiver.
-                    isVisible={!gameState.pendingTrade}
+                    isVisible={!gameState.pendingTrade && !isProcessingAction}
                     onActionSelect={(async (action: ActionType) => {
                         if (Number(action) === ActionType.TradeOffer) {
                             setIsTradeWindowOpen(true);
                             return;
                         }
-                        if (Number(action) === ActionType.AcceptTradeOffer) {
-                            if (!session || !clientPlayerId) return;
-                            await respondToTrade(session.boardId, clientPlayerId, true)
-                                .catch((err) => console.error("Error accepting trade:", err));
-                            return;
-                        }
-                        if (!session || !connection || !clientPlayerId) return;
-                        await selectAction(session.boardId, clientPlayerId, action)
-                            .catch((err) => console.error("Error selecting action:", err));
 
+                        setValidActions([]);
+                        setIsProcessingAction(true);
+                        try {
+                            if (Number(action) === ActionType.AcceptTradeOffer) {
+                                if (!session || !clientPlayerId) return;
+                                await respondToTrade(session.boardId, clientPlayerId, true);
+                            } else {
+                                if (!session || !connection || !clientPlayerId) return;
+                                await selectAction(session.boardId, clientPlayerId, action);
+                            }
+                        } catch (err) {
+                            console.error("Error processing action:", err);
+                        } finally {
+                            setIsProcessingAction(false);
+                        }
                     })}
                 />
 
