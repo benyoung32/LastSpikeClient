@@ -73,38 +73,40 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
 }) => {
     return (
         <div
-            className={`absolute flex flex-col gap-3 p-4 bg-slate-900/90 backdrop-blur-md rounded-xl border shadow-xl transition-all duration-300 w-64 ${screenPosition}`}
+            className={`absolute flex flex-row items-center gap-2 px-5 py-2 bg-slate-900/90 backdrop-blur-md rounded-full border shadow-xl transition-all duration-300 ${screenPosition}`}
             style={{
                 borderColor: color,
-                boxShadow: `0 0 15px ${color}40`
+                boxShadow: `0 0 15px ${color}40`,
+                minWidth: '400px'
             }}
         >
-
-            <div className="flex justify-between items-end border-b border-slate-700/50 pb-2">
-                <div className="flex flex-col overflow-hidden">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                        {isClient ? 'You' : ''}
-                    </span>
-                    <span
-                        className="font-bold text-lg truncate"
-                        style={{ color: color }}
-                        title={player.name}
-                    >
-                        {player.name}
-                    </span>
-                </div>
-                <div className="text-right">
-                    <AnimatedMoney value={money} />
-                </div>
+            {/* Left: Player Name */}
+            <div className="flex flex-col overflow-hidden min-w-[100px] max-w-[140px]">
+                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+                    {isClient ? 'You' : 'Player'}
+                </span>
+                <span
+                    className="font-bold text-lg truncate"
+                    style={{ color: color }}
+                    title={player.name}
+                >
+                    {player.name}
+                </span>
             </div>
 
-            {/* Properties Widget Container */}
-            {/* We force a specific height/width or let it fill. Currently passing w-full. 
-                The widget implementation should be flexible now. */}
-            <PropertiesWidget
-                properties={properties}
-                className="w-full h-24 bg-slate-800/50 hover:bg-slate-800"
-            />
+            {/* Center: Properties Widget */}
+            <div className="w-48 relative h-16 flex items-center justify-center">
+                <PropertiesWidget
+                    properties={properties}
+                    className="w-full h-full"
+                    arcDirection={screenPosition.includes('top-4') ? 'down' : 'up'}
+                />
+            </div>
+
+            {/* Right: Money */}
+            <div className="text-right min-w-[100px]">
+                <AnimatedMoney value={money} />
+            </div>
         </div>
     );
 };

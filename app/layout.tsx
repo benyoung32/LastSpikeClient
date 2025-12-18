@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en" >
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased font-cute`}
+        className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased font-cute overflow-hidden`}
       >
         <SignalRProvider>
           {children}

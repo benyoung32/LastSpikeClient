@@ -20,6 +20,8 @@ export interface GameState {
     currentPlayerId: string;
     turnPhase: TurnPhase;
     validActions: ActionType[];
+    dice1: number;
+    dice2: number;
     pendingTrade: Trade | null;
 }
 
@@ -32,6 +34,8 @@ export function createEmptyGameState(): GameState {
         currentPlayerId: "",
         turnPhase: TurnPhase.Start,
         validActions: [],
+        dice1: 0,
+        dice2: 0,
         pendingTrade: null
     };
 }

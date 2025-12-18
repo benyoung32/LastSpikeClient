@@ -7,6 +7,7 @@ import { SPACES, VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { PropertyCard } from "./PropertyCard";
 import { motion, useAnimation, AnimatePresence } from "framer-motion";
+import { DiceRollAnimation } from "./DiceRollAnimation";
 
 interface GameBoardProps {
     session: SessionData;
@@ -36,8 +37,8 @@ const SPACE_WIDTH_H = (BOARD_INNER_WIDTH - CORNER_SIZE * 2) / 5;
 const SPACE_HEIGHT_V = (BOARD_INNER_HEIGHT - CORNER_SIZE * 2) / 3;
 
 // Map Coordinates (Inner Diamond)
-const MAP_WIDTH = BOARD_INNER_WIDTH * 0.7;
-const MAP_HEIGHT = BOARD_INNER_HEIGHT * 0.6;
+const MAP_WIDTH = BOARD_INNER_WIDTH * 0.65;
+const MAP_HEIGHT = BOARD_INNER_HEIGHT * 0.65;
 const MAP_CENTER_X = VIEWBOX_WIDTH / 2;
 const MAP_CENTER_Y = VIEWBOX_HEIGHT / 2;
 const MAP_LEFT = MAP_CENTER_X - MAP_WIDTH / 2;
@@ -393,26 +394,67 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
     };
 
     return (
-        <main className="flex h-screen w-full flex-col bg-zinc-950 text-white overflow-hidden font-cute">
-            <div className="flex-1 relative flex items-center justify-center p-4">
+        <main className="flex h-screen w-full flex-col bg-stone-800 text-white overflow-hidden font-cute items-center justify-center p-4">
+            <div className="relative w-full max-w-[calc(80vh*14/9)] aspect-[14/9] shadow-2xl rounded-xl border border-stone-400 overflow-hidden">
                 <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-                    className="w-[80%] h-[80%] max-w-[80vw] max-h-[80vh] select-none shadow-2xl bg-[#dadabfff] rounded-xl border border-stone-400"
                     preserveAspectRatio="xMidYMid meet"
                 >
                     {/* --- Helper Definitions (Gradients, Filters) --- */}
                     <defs>
+                        {/* Board Vignette */}
+                        <radialGradient id="board-grad" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
+                            <stop offset="0%" stopColor="#eedece" />
+                            <stop offset="100%" stopColor="#d4c5b0" />
+                        </radialGradient>
+
+                        {/* Space Tile Gradient (glassy/convex look) */}
+                        <linearGradient id="space-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="white" stopOpacity="0.3" />
+                            <stop offset="50%" stopColor="white" stopOpacity="0" />
+                            <stop offset="100%" stopColor="black" stopOpacity="0.1" />
+                        </linearGradient>
+
                         <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                             <feGaussianBlur stdDeviation="3" result="blur" />
                             <feComposite in="SourceGraphic" in2="blur" operator="over" />
                         </filter>
+
                         <filter id="token-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="2" dy="6" stdDeviation="1" floodColor="#000000" floodOpacity="0.5" />
+                            <feDropShadow dx="2" dy="4" stdDeviation="2" floodColor="#000000" floodOpacity="0.4" />
                         </filter>
+
+                        <filter id="inner-map-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#5c4d3c" floodOpacity="0.3" />
+                        </filter>
+
                         <filter id="text-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="3" dy="3" stdDeviation="0" floodColor="#000000" floodOpacity="0.75" />
+                            <feDropShadow dx="2" dy="2" stdDeviation="1" floodColor="#000000" floodOpacity="0.6" />
+                        </filter>
+
+                        {/* Paper Texture Filter */}
+                        <filter id="paper-texture">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" result="noise" />
+                            <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.05 0" in="noise" result="coloredNoise" />
+                            <feComposite operator="in" in="coloredNoise" in2="SourceGraphic" result="composite" />
+                            <feBlend mode="multiply" in="composite" in2="SourceGraphic" />
                         </filter>
                     </defs>
+
+                    {/* Board Background */}
+                    <rect x="0" y="0" width="100%" height="100%" fill="url(#board-grad)" filter="url(#paper-texture)" />
+
+                    {/* Inner Map Separation Area */}
+                    <rect
+                        x={MAP_LEFT - 70}
+                        y={MAP_TOP}
+                        width={MAP_WIDTH + 140}
+                        height={MAP_HEIGHT}
+                        rx="30"
+                        fill="#e6dccd"
+                        opacity="0.6"
+                        filter="url(#inner-map-shadow)"
+                    />
 
                     {/* --- Routes (Tracks) --- */}
                     <g className="routes">
@@ -424,6 +466,43 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                 return route.cityPair.city1 === cities.city1 && route.cityPair.city2 === cities.city2
                             });
                             const isValid = routeIndex !== -1;
+
+                            // Find the route in gameState to get numTracks
+                            const gameRoute = gameState?.routes.find(r =>
+                                (r.cityPair.city1 === cities.city1 && r.cityPair.city2 === cities.city2) ||
+                                (r.cityPair.city1 === cities.city2 && r.cityPair.city2 === cities.city1)
+                            );
+                            const numTracks = gameRoute?.numTracks || 0;
+
+                            // Track Geometry Logic
+                            const midX = (p1.x + p2.x) / 2;
+                            const isRightSide = midX > MAP_CENTER_X;
+
+                            const isReversed = isRightSide ? p1.x < p2.x : p1.x > p2.x;
+                            const start = isReversed ? p2 : p1;
+                            const end = isReversed ? p1 : p2;
+
+                            const dx = end.x - start.x;
+                            const dy = end.y - start.y;
+
+                            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const segLen = dist / 4;
+
+                            const w = segLen + 1;
+                            const h = 8; // Width of the track piece
+
+                            // Ladder Style Track
+                            const railWidth = 6;
+                            const tieWidth = 5;
+                            const railColor = "#000000ff"; // Dark Brown
+                            const tieColor = "#000000ff"; // Dark Brown
+
+                            // Calculate visible line start/end to avoid overlap with tracks
+                            const coverageRatio = numTracks / 4.0;
+                            const lineStartX = start.x + dx * coverageRatio;
+                            const lineStartY = start.y + dy * coverageRatio;
+
                             return (
                                 <g
                                     key={`route-${idx}`}
@@ -436,95 +515,65 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     }}
                                     className={`group transition-all duration-300`}
                                 >
-                                    {/* Invisible thick line for easier clicking */}
+                                    {/* Invisible thick line for easier clicking - Full Length */}
                                     <line
                                         x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                                         stroke="transparent"
                                         strokeWidth={20}
                                     />
-                                    {/* Visible Line */}
+                                    {/* Visible Line - Clipped based on tracks */}
                                     <line
-                                        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                                        x1={lineStartX} y1={lineStartY} x2={end.x} y2={end.y}
                                         stroke={isValid ? "#fbbf24" : "#71717a"}
                                         strokeWidth={isValid ? 3 : 3}
                                         className={`transition-all duration-200 ${isValid ? 'group-hover:stroke-[6px]' : ''}`}
                                     />
                                     {/* Built Track Segments */}
-                                    {(() => {
-                                        // Find the route in gameState to get numTracks
-                                        const gameRoute = gameState?.routes.find(r =>
-                                            (r.cityPair.city1 === cities.city1 && r.cityPair.city2 === cities.city2) ||
-                                            (r.cityPair.city1 === cities.city2 && r.cityPair.city2 === cities.city1)
-                                        );
-                                        const numTracks = gameRoute?.numTracks || 0;
+                                    {numTracks > 0 && (
+                                        <g filter="url(#token-shadow)">
+                                            {Array.from({ length: numTracks }).map((_, tIdx) => {
+                                                const t = (tIdx + 0.5) / 4.0;
+                                                const cx = start.x + dx * t;
+                                                const cy = start.y + dy * t;
 
-                                        if (numTracks === 0) return null;
+                                                return (
+                                                    <g
+                                                        key={`track-${idx}-${tIdx}`}
+                                                        transform={`translate(${cx}, ${cy}) rotate(${angle})`}
+                                                        className={`transition-all duration-100 pointer-events-none`}
+                                                    >
+                                                        {/* Sleeper Ties (3 per segment) */}
+                                                        {[-0.3, 0, 0.3].map((offset, i) => (
+                                                            <rect
+                                                                key={i}
+                                                                x={(w * offset) - (tieWidth / 2)}
+                                                                y={-h}
+                                                                width={tieWidth}
+                                                                height={h * 2}
+                                                                fill={tieColor}
+                                                            />
+                                                        ))}
 
-                                        const midX = (p1.x + p2.x) / 2;
-                                        const isRightSide = midX > MAP_CENTER_X;
-
-                                        const isReversed = isRightSide ? p1.x < p2.x : p1.x > p2.x;
-                                        const start = isReversed ? p2 : p1;
-                                        const end = isReversed ? p1 : p2;
-
-                                        const dx = end.x - start.x;
-                                        const dy = end.y - start.y;
-
-                                        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                                        const dist = Math.sqrt(dx * dx + dy * dy);
-                                        const segLen = dist / 4;
-
-                                        const w = segLen + 1;
-                                        const h = 8; // Width of the track piece
-
-                                        // Ladder Style Track
-                                        const railWidth = 7;
-                                        const tieWidth = 6;
-                                        const railColor = "#000000ff"; // Dark Brown
-                                        const tieColor = "#000000ff"; // Dark Brown
-
-                                        return Array.from({ length: numTracks }).map((_, tIdx) => {
-                                            const t = (tIdx + 0.5) / 4.0;
-                                            const cx = start.x + dx * t;
-                                            const cy = start.y + dy * t;
-
-                                            return (
-                                                <g
-                                                    key={`track-${idx}-${tIdx}`}
-                                                    transform={`translate(${cx}, ${cy}) rotate(${angle})`}
-                                                    className={`transition-all duration-100 pointer-events-none`}
-                                                >
-                                                    {/* Sleeper Ties (3 per segment) */}
-                                                    {[-0.25, 0, 0.25].map((offset, i) => (
+                                                        {/* Rails (Top and Bottom) */}
                                                         <rect
-                                                            key={i}
-                                                            x={(w * offset) - (tieWidth / 2)}
-                                                            y={-h}
-                                                            width={tieWidth}
-                                                            height={h * 2}
-                                                            fill={tieColor}
+                                                            x={-w / 2}
+                                                            y={(-h / 2) + 10}
+                                                            width={w}
+                                                            height={railWidth}
+                                                            fill={railColor}
                                                         />
-                                                    ))}
-
-                                                    {/* Rails (Top and Bottom) */}
-                                                    <rect
-                                                        x={-w / 2}
-                                                        y={(-h / 2) + 10}
-                                                        width={w}
-                                                        height={railWidth}
-                                                        fill={railColor}
-                                                    />
-                                                    <rect
-                                                        x={-w / 2}
-                                                        y={(h / 2) - railWidth - 10}
-                                                        width={w}
-                                                        height={railWidth}
-                                                        fill={railColor}
-                                                    />
-                                                </g>
-                                            );
-                                        });
-                                    })()}
+                                                        <rect
+                                                            x={-w / 2}
+                                                            y={(h / 2) - railWidth - 10}
+                                                            width={w}
+                                                            height={railWidth}
+                                                            fill={railColor}
+                                                        />
+                                                    </g>
+                                                );
+                                            })}
+                                        </g>
+                                    )}
                                 </g>
                             );
                         })}
@@ -549,16 +598,18 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         cy={pos.y}
                                         r={CITY_RADIUS}
                                         stroke={CITY_COLORS[city]}
+                                        fill={CITY_COLORS[city]}
                                         strokeWidth={6}
                                         className="transition-all duration-200 group-hover:stroke-[10px]"
+                                        filter="url(#token-shadow)"
                                     />
                                     <text
                                         x={pos.x}
-                                        y={pos.y - CITY_RADIUS - 12}
+                                        y={pos.y - CITY_RADIUS - 16}
                                         textAnchor="middle"
                                         fill={CITY_COLORS[city]}
-                                        className="text-sm font-bold uppercase pointer-events-none transition-all duration-200 tracking-wider group-hover:text-[22px]"
-                                        style={{ fontSize: '20px', fontWeight: 'bold' }}
+                                        className="text-[24px] group-hover:text-[26px] font-bold uppercase pointer-events-none transition-all duration-200 tracking-widest"
+                                        filter="url(#text-shadow)"
                                     >
                                         {City[city]}
                                     </text>
@@ -586,10 +637,21 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         width={width}
                                         height={height}
                                         fill={SPACE_COLORS[SPACES[index].type]}
-                                        stroke={"#52525b"}
+                                        stroke={"rgba(0,0,0,0.2)"}
                                         strokeWidth={1}
+                                        rx={4}
                                         className="transition-all duration-200 hover:filter-brightness-110 group-hover:stroke-[#fbbf24] group-hover:stroke-[3px]"
+                                        filter="url(#token-shadow)"
                                     />
+                                    {/* Overlay Gradient for depth */}
+                                    <rect
+                                        width={width}
+                                        height={height}
+                                        fill="url(#space-grad)"
+                                        rx={4}
+                                        className="pointer-events-none"
+                                    />
+
                                     <text
                                         x={width / 2}
                                         y={height / 5}
@@ -624,7 +686,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     {space.cost > 0 && (
                                         <text
                                             x={width / 2}
-                                            y={height / 2 + 40}
+                                            y={height / 2 + 30}
                                             textAnchor="middle"
                                             dominantBaseline="middle"
                                             fill="#ffcc00ff"
@@ -716,6 +778,13 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                     )}
                 </AnimatePresence>,
                 document.body
+            )}
+            {/* Dice Animation Overlay */}
+            {gameState && (
+                <DiceRollAnimation
+                    dice1={gameState.dice1}
+                    dice2={gameState.dice2}
+                />
             )}
         </main >
     );

@@ -12,6 +12,7 @@ import ActionBar from "@/app/components/ActionBar";
 import { PlayerInfoPanel } from "@/app/components/PlayerInfoPanel";
 import GameOverScreen from "@/app/components/GameOverScreen";
 import TradeWindow from "@/app/components/TradeWindow";
+import { useGameSounds } from "@/app/hooks/useGameSounds";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -39,6 +40,7 @@ export default function SessionPage() {
     const [validActions, setValidActions] = useState<ActionType[]>([]);
     const [selectableRoutes, setSelectableRoutes] = useState<Route[]>([]);
     const [isTradeWindowOpen, setIsTradeWindowOpen] = useState(false);
+    const { addSound } = useGameSounds();
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
     const sessionRef = useRef(session);
@@ -60,29 +62,13 @@ export default function SessionPage() {
     const fetchPlayerList = useCallback(async () => {
         try {
             const playerIds = await getSessionPlayers(sessionId);
+            console.log("Player list:", playerIds);
             setPlayers(playerIds);
         } catch (err: any) {
             console.error("Failed to fetch player list:", err);
             setError("Failed to load player list.");
         }
     }, [sessionId]);
-
-    const addTestProperties = (state: GameState) => {
-        // Add test properties: give each player 2 of each property
-        const allCities = Object.values(City).filter(c => typeof c === 'number') as City[];
-        const playerIds = Object.keys(state.players);
-        const testProperties: { city: City; owner_PID: string }[] = [];
-
-        playerIds.forEach(pid => {
-            allCities.forEach(city => {
-                testProperties.push({ city, owner_PID: pid });
-                testProperties.push({ city, owner_PID: pid });
-            });
-        });
-
-        state.properties = testProperties;
-        return state
-    }
 
     // Use a ref to access the latest gameState in callbacks/effects without triggering re-runs
     const gameStateRef = useRef(gameState);
@@ -104,6 +90,20 @@ export default function SessionPage() {
             const currentGameState = gameStateRef.current;
             let maxDelay = 0;
             let hasPositionChange = false;
+
+            const currentDice1 = currentGameState?.dice1 || 0;
+            const currentDice2 = currentGameState?.dice2 || 0;
+
+            if (data.dice1 !== 0 && (data.dice1 !== currentDice1 || data.dice2 !== currentDice2)) {
+                // Update only dice first
+                setGameState(prev => ({
+                    ...prev,
+                    dice1: data.dice1,
+                    dice2: data.dice2
+                }));
+                // Wait for animation
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
 
             // Check for position changes
             if (currentGameState && currentGameState.players && Object.keys(currentGameState.players).length > 0) {
@@ -129,18 +129,20 @@ export default function SessionPage() {
                 // 1. Update ONLY positions first
                 const intermediateState = {
                     ...currentGameState,
-                    players: { ...currentGameState.players }
+                    players: { ...data.players },
+                    dice1: data.dice1,
+                    dice2: data.dice2
                 };
 
-                // Update players to new positions, keep other data (money, etc) same as old
-                Object.keys(data.players).forEach(pId => {
-                    if (intermediateState.players[pId]) {
-                        intermediateState.players[pId] = {
-                            ...intermediateState.players[pId],
-                            boardPosition: data.players[pId].boardPosition
-                        };
-                    }
-                });
+                // // Update players to new positions, keep other data (money, etc) same as old
+                // Object.keys(data.players).forEach(pId => {
+                //     if (intermediateState.players[pId]) {
+                //         intermediateState.players[pId] = {
+                //             ...intermediateState.players[pId],
+                //             boardPosition: data.players[pId].boardPosition
+                //         };
+                //     }
+                // });
 
                 setGameState(intermediateState);
 
@@ -161,6 +163,37 @@ export default function SessionPage() {
             console.error("Failed to fetch game state:", err);
         }
     }, [clientPlayerId]);
+
+    // // Effect for turn start sound
+    // useEffect(() => {
+    //     if (!gameState || !clientPlayerId) return;
+    // }, [gameState, clientPlayerId]);
+
+    // Store previous turn info to detect EDGES
+    const prevTurnInfo = useRef<{ playerId: string; phase: number } | null>(null);
+
+    useEffect(() => {
+        if (!gameState || !clientPlayerId) return;
+
+        const currentTurnInfo = {
+            playerId: gameState.currentPlayerId,
+            phase: gameState.turnPhase
+        };
+
+        const isMyTurn = gameState.currentPlayerId === clientPlayerId;
+        const isStartPhase = gameState.turnPhase === 0; // TurnPhase.Start
+
+        // Check if we just transitioned INTO "My Turn Start Phase"
+        const wasNotMyTurnStart = !prevTurnInfo.current ||
+            prevTurnInfo.current.playerId !== clientPlayerId ||
+            prevTurnInfo.current.phase !== 0;
+
+        if (isMyTurn && isStartPhase && wasNotMyTurnStart) {
+            addSound('bell');
+        }
+
+        prevTurnInfo.current = currentTurnInfo;
+    }, [gameState, clientPlayerId, addSound]);
 
 
 
@@ -223,17 +256,25 @@ export default function SessionPage() {
 
         const onPlayerJoined = () => {
             console.log("PlayerJoined event received");
-            fetchPlayerList();
+            // Add a small delay to allow the backend to update its read model/database
+            setTimeout(() => {
+                fetchPlayerList();
+            }, 300);
         };
 
         const onPlayerRemoved = () => {
             console.log("PlayerRemoved event received");
-            fetchPlayerList();
+            // Add a small delay to allow the backend to update its read model/database
+            setTimeout(() => {
+                fetchPlayerList();
+            }, 300);
         };
 
         const onGameStarted = () => {
             console.log("GameStarted event received");
-            fetchSessionData(false);
+            setTimeout(() => {
+                fetchSessionData(false);
+            }, 300);
         };
 
         const onGameBoardUpdated = () => {
@@ -347,29 +388,53 @@ export default function SessionPage() {
                     validRoutes={selectableRoutes}
                 />
 
-                {getOrderedPlayers().map((p, index) => {
-                    if (index >= INFO_PANEL_POSITIONS.length) return null;
+                {(() => {
+                    // Determine which set of positions to use based on player count
+                    let currentPositions = INFO_PANEL_POSITIONS;
+                    if (players.length <= 4) {
+                        currentPositions = INFO_PANEL_POSITIONS.slice(0, 4);
+                    } else if (players.length > 4) {
+                        // Reorder for 5 players: Counter-clockwise from Bottom Left
+                        // 0: BL, 1: BR, 4: Right Edge, 2: TR, 3: TL
+                        currentPositions = [
+                            INFO_PANEL_POSITIONS[0],
+                            INFO_PANEL_POSITIONS[1],
+                            INFO_PANEL_POSITIONS[4],
+                            INFO_PANEL_POSITIONS[2],
+                            INFO_PANEL_POSITIONS[3],
+                            INFO_PANEL_POSITIONS[5],
+                        ];
+                    }
 
-                    const pState = gameState.players[p.id];
-                    if (!pState) return null;
+                    return getOrderedPlayers().map((p, index) => {
+                        if (index >= currentPositions.length) return null;
 
-                    const playerProperties = gameState.properties.filter(prop => prop.owner_PID === p.id);
+                        const pState = gameState.players[p.id];
+                        if (!pState) return null;
 
-                    return (
-                        <PlayerInfoPanel
-                            key={p.id}
-                            player={p}
-                            money={pState.money}
-                            properties={playerProperties}
-                            screenPosition={INFO_PANEL_POSITIONS[index]}
-                            isClient={p.id === clientPlayerId}
-                            color={players.findIndex(pl => pl.id === p.id) !== -1 ? PLAYER_COLORS[players.findIndex(pl => pl.id === p.id) % PLAYER_COLORS.length] : "#ffffff"}
-                        />
-                    );
-                })}
+                        const playerProperties = gameState.properties.filter(prop => prop.owner_PID === p.id);
+
+                        return (
+                            <PlayerInfoPanel
+                                key={p.id}
+                                player={p}
+                                money={pState.money}
+                                properties={playerProperties}
+                                screenPosition={currentPositions[index]}
+                                isClient={p.id === clientPlayerId}
+                                color={players.findIndex(pl => pl.id === p.id) !== -1 ? PLAYER_COLORS[players.findIndex(pl => pl.id === p.id) % PLAYER_COLORS.length] : "#ffffff"}
+                            />
+                        );
+                    });
+                })()}
 
                 <ActionBar
                     validActions={validActions}
+                    waitingMessage={
+                        gameState.currentPlayerId !== clientPlayerId && !gameState.pendingTrade && !gameState.isGameOver
+                            ? `Waiting for ${players.find(p => p.id === gameState.currentPlayerId)?.name || 'Opponent'}...`
+                            : undefined
+                    }
                     // Hide action bar if there is a pending trade for me (I must respond first)
                     // The trade object in GameState: Player2Id is the receiver.
                     isVisible={!gameState.pendingTrade}

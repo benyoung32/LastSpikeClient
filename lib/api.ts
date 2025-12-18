@@ -1,9 +1,15 @@
 import { Player, SessionData, GameState, ActionType, Route, CityPair, Trade } from "@/types";
 import axios, { AxiosResponse } from "axios";
 
-export const API_BASE_URL = process.env.NODE_ENV === "development"
-    ? "http://localhost:5098"
-    : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5098");
+const getBaseUrl = () => {
+    if (process.env.NODE_ENV === "development") {
+        return "http://localhost:5098";
+    }
+    const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5098";
+    return url.startsWith("http") ? url : `https://${url}`;
+};
+
+export const API_BASE_URL = getBaseUrl();
 
 async function handleResponse<T>(request: Promise<AxiosResponse<T>>): Promise<T> {
     try {

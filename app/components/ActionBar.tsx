@@ -4,6 +4,7 @@ interface ActionBarProps {
     validActions: ActionType[];
     onActionSelect: (action: ActionType) => void;
     isVisible?: boolean;
+    waitingMessage?: string;
 }
 
 const ACTION_LABELS: Record<number, string> = {
@@ -15,11 +16,29 @@ const ACTION_LABELS: Record<number, string> = {
     [ActionType.AcceptTradeOffer]: "Accept Trade",
 };
 
-export default function ActionBar({ validActions, onActionSelect, isVisible = true }: ActionBarProps) {
+export default function ActionBar({ validActions, onActionSelect, isVisible = true, waitingMessage }: ActionBarProps) {
     const visibleActions = validActions?.filter(action => ACTION_LABELS[action]) ?? [];
 
-    if (!isVisible || visibleActions.length === 0) {
+    const showTrackSelectionParams = validActions?.some(action =>
+        action === ActionType.PlaceTrack || action === ActionType.Rebellion
+    );
+
+    const effectiveMessage = showTrackSelectionParams
+        ? "Select a highlighted route above"
+        : waitingMessage;
+
+    if (!isVisible || (visibleActions.length === 0 && !effectiveMessage)) {
         return null;
+    }
+
+    if (effectiveMessage && visibleActions.length === 0) {
+        return (
+            <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 border border-zinc-700/50 rounded-full px-8 py-4 shadow-2xl backdrop-blur-sm animate-pulse">
+                <span className="text-zinc-400 font-medium tracking-wide text-lg flex items-center gap-3">
+                    {effectiveMessage}
+                </span>
+            </div>
+        );
     }
 
     return (

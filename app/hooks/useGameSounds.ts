@@ -13,8 +13,10 @@ export const useGameSounds = () => {
                 slide3: new Audio('/sounds/slide3.mp3'),
                 slide4: new Audio('/sounds/slide4.mp3'),
                 build: new Audio('/sounds/build.mp3'),
-                riot: new Audio('/sounds/riot.wav'),
-                cash: new Audio('/sounds/cash.wav'),
+                riot: new Audio('/sounds/riot.mp3'),
+                cash: new Audio('/sounds/cash.mp3'),
+                bell: new Audio('/sounds/bell.mp3'),
+                dice: new Audio('/sounds/dice.mp3'),
             };
 
             // Preload
