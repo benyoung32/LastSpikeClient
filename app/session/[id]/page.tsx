@@ -296,6 +296,11 @@ export default function SessionPage() {
             connection.off("PlayerRemoved", onPlayerRemoved);
             connection.off("GameStarted", onGameStarted);
             connection.off("GameBoardUpdated", onGameBoardUpdated);
+            // Leave the SignalR group for this session
+            if (clientPlayerId) {
+                connection.invoke("LeaveSession", sessionId, clientPlayerId)
+                    .catch((err) => console.error("Error leaving SignalR session group:", err));
+            }
         };
     }, [sessionId, connection, clientPlayerId, fetchPlayerList, fetchSessionData]);
 
@@ -511,8 +516,6 @@ export default function SessionPage() {
     }
 
     // Check for game over state and render the screen if true
-
-
     return (
         <LobbyView
             sessionId={sessionId}

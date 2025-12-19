@@ -204,7 +204,7 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({ properties, 
                         <div
                             // Synchronize styles with trigger for seamless transition
                             className={`fixed border border-slate-700 overflow-hidden flex flex-col pointer-events-auto transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] 
-                            ${isAnimating ? 'bg-slate-800/80 rounded-lg shadow-none' : 'bg-transparent border-none rounded-xl shadow-none'}
+                            ${isAnimating ? 'bg-slate-800/80 rounded-lg shadow-none' : 'bg-slate-800/50 border-none rounded-xl shadow-none'}
                         `}
                             style={getModalStyle()}
                         >

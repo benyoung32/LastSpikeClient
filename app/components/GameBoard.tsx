@@ -71,15 +71,15 @@ const SPACE_COLORS: Record<SpaceType, string> = {
 }
 
 const SPACE_DESCRIPTIONS: Record<SpaceType, string> = {
-    [SpaceType.CPRSubsidy]: "Collect $5000 when landing on CPR Subsidy, not passing it",
-    [SpaceType.Track]: `You must build a track if you land here.
-    Building on an empty route awards a free deed. 
-    Completing a route awards all players who own deeds of either city. 
+    [SpaceType.CPRSubsidy]: "Collect $5k when landing on CPR Subsidy, not passing it",
+    [SpaceType.Track]: `You must build a track for {cost}.
+    Starting an empty route awards a free deed. 
+    Completing a route awards all players who own deeds of either city
     `,
     [SpaceType.SettlerRents]: "Collect {cost} for each deed owned",
-    [SpaceType.Land]: "Optionally pay {cost} to purchase a random remaining deed. There are 5 deeds for each city",
+    [SpaceType.Land]: "Optionally pay {cost} to purchase a random deed. There are 5 total deeds for each city",
     [SpaceType.RoadbedCosts]: "Pay {cost} for each deed owned",
-    [SpaceType.Rebellion]: "Remove a track piece from a route containing 2 or 3 pieces",
+    [SpaceType.Rebellion]: "Demolish a track from a route containing 2 or 3 tracks",
     [SpaceType.EndOfTrack]: "Skip your next turn",
     [SpaceType.LandClaims]: "Roll the dice. Pay the number rolled x {cost}",
     [SpaceType.SurveyFees]: "Collect {cost} from all other players",
@@ -168,7 +168,7 @@ const getSpaceCenter = (index: number) => {
     const { x, y, width, height } = getSpaceGeometry(index);
     return {
         x: x + width / 2,
-        y: y + height / 2
+        y: y + height / 2 - 10 // Offset to leave room for text
     };
 };
 
@@ -480,7 +480,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
     };
 
     return (
-        <main className="flex h-screen w-full flex-col bg-stone-800 text-white overflow-hidden font-cute items-center justify-center p-4">
+        <main className="flex h-screen w-full flex-col bg-stone-800 text-white overflow-hidden font-cute items-center justify-center p-4 select-none">
             <div className="relative w-full max-w-[calc(80vh*14/9)] aspect-[14/9] shadow-2xl rounded-xl border border-stone-400 overflow-hidden">
                 <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -763,7 +763,10 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                         {SPACES.map((space, index) => {
                             const { x, y, width, height, isCorner } = getSpaceGeometry(index);
 
-                            const label = SpaceType[space.type].replace(/([A-Z])/g, '$1').trim();
+                            const label = SpaceType[space.type]
+                                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                                .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+                                .trim();
 
                             return (
                                 <g
@@ -826,7 +829,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     {space.cost > 0 && (
                                         <text
                                             x={width / 2}
-                                            y={height / 2 + 30}
+                                            y={height - 20}
                                             textAnchor="middle"
                                             dominantBaseline="middle"
                                             fill="#ffcc00ff"

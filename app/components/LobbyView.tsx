@@ -1,5 +1,9 @@
 "use client";
 
+// TODO: Add a leave session button. this button should return the user to the main menu, clear the session storage, and notify the server
+// TODO: add a cancel session button. this button should delete the session, clear the session storage, and kick out other players
+// TODO: the UI should be reworked. the playerlist should be on the left and the control panel on the right
+
 import { Player } from "@/types";
 
 interface LobbyViewProps {
@@ -41,10 +45,10 @@ export default function LobbyView({
                             <div className="text-center space-y-4">
                                 <div className="space-y-4">
                                     <h2 className="text-3xl font-medium text-white">
-                                        {isHost ? "You are the Host" : "Waiting for host to start..."}
+                                        {isHost ? "You are the Host" : "Waiting for the host to start..."}
                                     </h2>
-                                    <p className="text-zinc-500">
-                                        Invite friends by sharing the Session ID.
+                                    <p className="text-zinc-500 text-lg">
+                                        Invite friends by sharing the URL or copying the Session ID.
                                     </p>
                                 </div>
                             </div>

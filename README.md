@@ -2,9 +2,32 @@
 
 A browser client for the "Last Spike" board game, built with Next.js. This application provides a UI for the game, connecting to a backend server, allowing players to create and join sessions and play the game. [The backend server is available here](https://github.com/benyoung32/LastSpikeServer).
 
+[The client is currently hosted using Vercel](https://last-spike-client.vercel.app)
+
+The game is fully interactive, with sound effects, animations, and a robust server/client connection that survives refreshes and temporary losses of connection. Starting a game is as simple as entering a name and clicking "Create New Session", then sharing the URL with your friends.
+
 ## Inspiration
 
 The goal behind this project was to recreate one of my favorite board games, The Last Spike 1976, inside a web application so that I could play the game with friends from far away. The classic Canadian board game is a monopoly-type game where players compete to hoard properties and money while building the transcontinental railroad across Canada. The ultimate goal of each player is to have the most money when the last spike of the rail connecting Vancouver and Montreal is driven.
+
+## Gameplay images
+
+# Landing page
+![landing_page](./README_imgs/landing.png)
+
+# Lobby
+![lobby](./README_imgs/lobby.png)
+
+# Game
+![game_in_progress](./README_imgs/game_in_progress.png)
+
+## Technology Stack
+
+- Next.js
+- TypeScript
+- TailwindCSS
+- Axios
+- SignalR
 
 ## Project Structure & Components
 

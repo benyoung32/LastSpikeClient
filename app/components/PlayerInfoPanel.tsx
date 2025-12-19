@@ -83,7 +83,7 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
             {/* Left: Player Name */}
             <div className="flex flex-col overflow-hidden min-w-[100px] max-w-[140px]">
                 <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                    {isClient ? 'You' : 'Player'}
+                    {isClient ? 'You' : 'Opponent'}
                 </span>
                 <span
                     className="font-bold text-lg truncate"
