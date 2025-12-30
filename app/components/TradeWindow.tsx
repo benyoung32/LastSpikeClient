@@ -1,6 +1,5 @@
-
 import { useState, useMemo } from "react";
-import { Player, GameState, Trade, Property, City, CITY_COLORS } from "@/types";
+import { Player, GameState, Trade, Property, City, CITY_COLORS, PLAYER_COLORS } from "@/types";
 
 interface TradeWindowProps {
     visible: boolean;
@@ -25,6 +24,13 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     const otherPlayers = useMemo(() => players.filter(p => p.id !== currentPlayerId), [players, currentPlayerId]);
     const currentPlayer = gameState.players[currentPlayerId];
 
+    // Helper to get player color
+    const getPlayerColor = (playerId: string) => {
+        const index = players.findIndex(p => p.id === playerId);
+        if (index === -1) return "#ffffff";
+        return PLAYER_COLORS[index % PLAYER_COLORS.length];
+    };
+
     // Properties with indices
     const allPropertiesWithIndices = useMemo(() =>
         gameState.properties.map((p, i) => ({ property: p, index: i })),
@@ -32,7 +38,7 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     );
 
     // Initialize state from pending trade if present
-    const isReceivingTrade = !!pendingTrade && pendingTrade.player2Id === currentPlayerId && !isCounterMode;
+    const isReceivingTrade = !!pendingTrade && !isCounterMode;
 
     // Reset state when opening/closing or changing target
     useMemo(() => {
@@ -41,8 +47,8 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                 // Pre-fill for counter offer or display for receiving
                 if (isCounterMode) {
                     setSelectedTargetPlayerId(pendingTrade.player1Id);
-                    setOfferMoney(pendingTrade.player2Money); 
-                    setRequestMoney(pendingTrade.player1Money); 
+                    setOfferMoney(pendingTrade.player2Money);
+                    setRequestMoney(pendingTrade.player1Money);
 
                     const newIndices = new Set<number>();
                     pendingTrade.properties.forEach(prop => {
@@ -66,18 +72,36 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     if (!currentPlayer) return null;
 
     // --- RECEIVING TRADE VIEW ---
+    // --- RECEIVING TRADE VIEW (or SPECTATING) ---
     if (isReceivingTrade && pendingTrade) {
         const senderName = players.find(p => p.id === pendingTrade.player1Id)?.name || "Unknown";
+        const receiverName = players.find(p => p.id === pendingTrade.player2Id)?.name || "Unknown";
+
+        const isRecipient = pendingTrade.player2Id === currentPlayerId;
+        const isProposer = pendingTrade.player1Id === currentPlayerId;
 
         const offeredProperties = pendingTrade.properties.filter(p => p.owner_PID === pendingTrade.player1Id);
         const requestedProperties = pendingTrade.properties.filter(p => p.owner_PID === pendingTrade.player2Id);
+
+        const senderColor = getPlayerColor(pendingTrade.player1Id);
+        const receiverColor = getPlayerColor(pendingTrade.player2Id);
 
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                 <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-2xl flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
                     <div className="p-6 border-b border-zinc-800 text-center">
-                        <h2 className="text-2xl font-bold text-zinc-100">Trade Offer Received</h2>
-                        <p className="text-zinc-400 mt-1">from <span className="text-amber-500 font-bold">{senderName}</span></p>
+                        <h2 className="text-2xl font-bold text-zinc-100">
+                            {isRecipient ? "Trade Offer Received" : (isProposer ? "Trade Offer Sent" : "Trade in Progress")}
+                        </h2>
+                        {isRecipient ? (
+                            <p className="text-zinc-400 mt-1">from <span style={{ color: senderColor }} className="font-bold">{senderName}</span></p>
+                        ) : (
+                            <p className="text-zinc-400 mt-1">
+                                <span style={{ color: senderColor }} className="font-bold">{senderName}</span>
+                                <span className="mx-2 text-zinc-600">to</span>
+                                <span style={{ color: receiverColor }} className="font-bold">{receiverName}</span>
+                            </p>
+                        )}
                     </div>
 
                     <div className="p-8 grid grid-cols-2 gap-8 relative">
@@ -87,14 +111,13 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                             </svg>
                         </div>
-
-                        {/* Matches existing layout: Left is "Offer" (Them), Right is "Request" (Me) */}
-
                         <div className="bg-zinc-950/50 p-6 rounded-xl border border-zinc-800 text-center">
-                            <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">You Get</h3>
+                            <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
+                                {isRecipient ? "You Get" : `${senderName} Gives`}
+                            </h3>
                             <div className="space-y-4">
                                 {pendingTrade.player1Money > 0 && (
-                                    <div className="text-2xl font-bold text-green-400">+${pendingTrade.player1Money.toLocaleString()}</div>
+                                    <div className="text-2xl font-bold text-green-400">${pendingTrade.player1Money.toLocaleString()}</div>
                                 )}
                                 <div className="space-y-2">
                                     {offeredProperties.map((p, i) => (
@@ -111,10 +134,12 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                         </div>
 
                         <div className="bg-zinc-950/50 p-6 rounded-xl border border-zinc-800 text-center">
-                            <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">You Give</h3>
+                            <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
+                                {isRecipient ? "You Give" : `${receiverName} Gives`}
+                            </h3>
                             <div className="space-y-4">
                                 {pendingTrade.player2Money > 0 && (
-                                    <div className="text-2xl font-bold text-red-400">-${pendingTrade.player2Money.toLocaleString()}</div>
+                                    <div className="text-2xl font-bold text-green-400">${pendingTrade.player2Money.toLocaleString()}</div>
                                 )}
                                 <div className="space-y-2">
                                     {requestedProperties.map((p, i) => (
@@ -131,25 +156,36 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                         </div>
                     </div>
 
-                    <div className="p-6 border-t border-zinc-800 grid grid-cols-3 gap-4">
-                        <button
-                            onClick={onDeny}
-                            className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg font-bold transition-all"
-                        >
-                            Deny
-                        </button>
-                        <button
-                            onClick={() => setIsCounterMode(true)}
-                            className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg font-bold transition-all"
-                        >
-                            Counter Offer
-                        </button>
-                        <button
-                            onClick={onAccept}
-                            className="px-4 py-3 bg-green-500 hover:bg-green-400 text-black rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)]"
-                        >
-                            Accept
-                        </button>
+                    <div className="p-6 border-t border-zinc-800 flex justify-center">
+                        {isRecipient ? (
+                            <div className="grid grid-cols-3 gap-4 w-full">
+                                <button
+                                    onClick={onDeny}
+                                    className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg font-bold transition-all"
+                                >
+                                    Deny
+                                </button>
+                                <button
+                                    onClick={() => setIsCounterMode(true)}
+                                    className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg font-bold transition-all"
+                                >
+                                    Counter Offer
+                                </button>
+                                <button
+                                    onClick={onAccept}
+                                    className="px-4 py-3 bg-green-500 hover:bg-green-400 text-black rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)]"
+                                >
+                                    Accept
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-zinc-400 animate-pulse font-medium">
+                                {isProposer
+                                    ? `Waiting for ${receiverName} to respond...`
+                                    : `Waiting for ${receiverName} to respond...`
+                                }
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

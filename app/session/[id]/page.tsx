@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getSession, getPlayer, startGame, getSessionPlayers, API_BASE_URL, getGameState, selectAction, offerTrade, respondToTrade } from "@/lib/api";
-import { SessionData, Player, GameState, City, createEmptyGameState, ActionType, Route, PLAYER_COLORS, Trade } from "@/types";
+import { getSession, getPlayer, startGame, getSessionPlayers, getGameState, selectAction, offerTrade, respondToTrade } from "@/lib/api";
+import { SessionData, Player, GameState, createEmptyGameState, ActionType, Route, PLAYER_COLORS } from "@/types";
 import { VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useSignalR } from "@/app/context/SignalRContext";
 import LobbyView from "@/app/components/LobbyView";
@@ -320,7 +320,6 @@ export default function SessionPage() {
     };
 
     const getRebellionTargets = (state: GameState): Route[] => {
-        console.log(state.routes);
         return state.routes.filter(route => route.numTracks > 1 && route.numTracks < 4);
     }
 
@@ -337,13 +336,11 @@ export default function SessionPage() {
 
     const getValidRoutes = (state: GameState, actions: ActionType[]) => {
         if (actions.includes(ActionType.Rebellion)) {
-            console.log("targets", getRebellionTargets(state));
             return getRebellionTargets(state);
         }
         if (actions.includes(ActionType.PlaceTrack)) {
             return getBuildableRoutes(state);
         }
-        // console.log(actions);
         return [];
     };
 
@@ -391,7 +388,6 @@ export default function SessionPage() {
                     currentPlayerId={clientPlayerId}
                     gameState={gameState}
                     onRouteSelect={(async (route: Route) => {
-                        console.log("Selected Route:", route.cityPair);
                         if (!session || !clientPlayerId) return;
                         await selectAction(session.boardId, clientPlayerId, gameState.validActions[0], route.cityPair);
                     })}
@@ -471,46 +467,41 @@ export default function SessionPage() {
                     })}
                 />
 
-                {clientPlayerId && (
-                    <TradeWindow
-                        visible={isTradeWindowOpen || (!!gameState.pendingTrade && gameState.pendingTrade.player2Id === clientPlayerId)}
-                        onClose={() => setIsTradeWindowOpen(false)}
-                        onSubmit={async (trade) => {
-                            if (!session || !clientPlayerId) return;
-                            console.log("Submitting trade:", trade);
-                            try {
-                                await offerTrade(session.boardId, trade);
-                                setIsTradeWindowOpen(false);
-                            } catch (err) {
-                                console.error("Failed to submit trade:", err);
-                            }
-                        }}
-                        currentPlayerId={clientPlayerId}
-                        players={players}
-                        gameState={gameState}
-                        pendingTrade={gameState.pendingTrade}
-                        onAccept={async () => {
-                            console.log("Accepting trade");
-                            if (!session || !clientPlayerId) return;
-                            try {
-                                await respondToTrade(session.boardId, clientPlayerId, true);
-                                setIsTradeWindowOpen(false); // Ensure local state is closed too
-                            } catch (err) {
-                                console.error("Failed to accept trade", err);
-                            }
-                        }}
-                        onDeny={async () => {
-                            console.log("Denying trade");
-                            if (!session || !clientPlayerId) return;
-                            try {
-                                await respondToTrade(session.boardId, clientPlayerId, false);
-                                setIsTradeWindowOpen(false);
-                            } catch (err) {
-                                console.error("Failed to deny trade", err);
-                            }
-                        }}
-                    />
-                )}
+                <TradeWindow
+                    visible={isTradeWindowOpen || !!gameState.pendingTrade}
+                    onClose={() => setIsTradeWindowOpen(false)}
+                    onSubmit={async (trade) => {
+                        if (!session || !clientPlayerId) return;
+                        try {
+                            await offerTrade(session.boardId, trade);
+                            setIsTradeWindowOpen(false);
+                        } catch (err) {
+                            console.error("Failed to submit trade:", err);
+                        }
+                    }}
+                    currentPlayerId={clientPlayerId || ""}
+                    players={players}
+                    gameState={gameState}
+                    pendingTrade={gameState.pendingTrade}
+                    onAccept={async () => {
+                        if (!session || !clientPlayerId) return;
+                        try {
+                            await respondToTrade(session.boardId, clientPlayerId, true);
+                            setIsTradeWindowOpen(false); // Ensure local state is closed too
+                        } catch (err) {
+                            console.error("Failed to accept trade", err);
+                        }
+                    }}
+                    onDeny={async () => {
+                        if (!session || !clientPlayerId) return;
+                        try {
+                            await respondToTrade(session.boardId, clientPlayerId, false);
+                            setIsTradeWindowOpen(false);
+                        } catch (err) {
+                            console.error("Failed to deny trade", err);
+                        }
+                    }}
+                />
             </>
         );
     }
