@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# testing
+test-results/generate-readme-images-Generate-README-Images-chromium/error-context.md
+playwright-report/data/5c51413d34f6e92b2c015065c25695ca6cf3e977.md
+playwright-report/index.html
+test-results/.last-run.json

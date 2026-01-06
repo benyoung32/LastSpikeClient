@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
-import { Player, Route, SessionData, City, SpaceType, GameState, CITY_COLORS, PLAYER_COLORS } from "@/types";
+import { Player, Route, SessionData, City, SpaceType, GameState, Property, CITY_COLORS, PLAYER_COLORS } from "@/types";
 import { SPACES, VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { PropertyCard } from "./PropertyCard";
 import { motion, useAnimation, AnimatePresence } from "framer-motion";
 import { DiceRollAnimation } from "./DiceRollAnimation";
+
 
 interface GameBoardProps {
     session: SessionData;
@@ -77,7 +78,7 @@ const SPACE_DESCRIPTIONS: Record<SpaceType, string> = {
     Completing a route awards all players who own deeds of either city
     `,
     [SpaceType.SettlerRents]: "Collect {cost} for each deed owned",
-    [SpaceType.Land]: "Optionally pay {cost} to purchase a random deed. There are 5 total deeds for each city",
+    [SpaceType.Land]: "Optionally pay {cost} to purchase a random deed. There are 5 deeds available for each city",
     [SpaceType.RoadbedCosts]: "Pay {cost} for each deed owned",
     [SpaceType.Rebellion]: "Demolish a track from a route containing 2 or 3 tracks",
     [SpaceType.EndOfTrack]: "Skip your next turn",
@@ -450,6 +451,8 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
         }
         return groups;
     }, [gameState]);
+
+
 
     const getPlayerOffset = (index: number, total: number) => {
         if (total <= 1) return { x: 0, y: 0 };
@@ -869,6 +872,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                         </g>
                     )}
                 </svg>
+
             </div>
             {/* City Property Modal */}
             {

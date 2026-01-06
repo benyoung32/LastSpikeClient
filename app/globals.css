@@ -73,3 +73,50 @@ body {
   /* Ensure it starts hidden */
   animation: game-over-fade-in 1s ease-in forwards;
 }
+
+/* Reusable Utilities */
+.hover-lift {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+.hover-lift:hover {
+  transform: scale(1.05);
+}
+
+/* Mouse-aware 3D Tilt Effect */
+.mouse-effect-3d {
+  --mouse-x: 0.5;
+  --mouse-y: 0.5;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.mouse-effect-3d:hover {
+  transform: perspective(1000px) rotateY(calc((var(--mouse-x) - 0.5) * 16deg)) rotateX(calc((var(--mouse-y) - 0.5) * -16deg)) scale(1.05);
+  transition: transform 0.2s ease-out;
+}
+
+/* Mouse-aware Spotlight Effect */
+.mouse-effect-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.mouse-effect-spotlight::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at calc(var(--mouse-x) * 100%) calc(var(--mouse-y) * 100%), rgba(255, 255, 255, 0.25), transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.mouse-effect-spotlight:hover::after {
+  opacity: 1;
+}

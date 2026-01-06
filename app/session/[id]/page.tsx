@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getSession, getPlayer, startGame, getSessionPlayers, getGameState, selectAction, offerTrade, respondToTrade } from "@/lib/api";
-import { SessionData, Player, GameState, createEmptyGameState, ActionType, Route, PLAYER_COLORS } from "@/types";
+import { SessionData, Player, GameState, createEmptyGameState, ActionType, Route, PLAYER_COLORS, Property, City } from "@/types";
 import { VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useSignalR } from "@/app/context/SignalRContext";
 import LobbyView from "@/app/components/LobbyView";
@@ -13,6 +13,7 @@ import { PlayerInfoPanel } from "@/app/components/PlayerInfoPanel";
 import GameOverScreen from "@/app/components/GameOverScreen";
 import TradeWindow from "@/app/components/TradeWindow";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
+import { DeckWidget } from "@/app/components/DeckWidget";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -22,7 +23,6 @@ const INFO_PANEL_POSITIONS = [
     "top-1/2 right-4 -translate-y-1/2 origin-right",      // Slot 4: Right Edge
     "top-1/2 left-4 -translate-y-1/2 origin-left"        // Slot 5: Left Edge
 ];
-
 
 export default function SessionPage() {
     const params = useParams();
@@ -51,15 +51,63 @@ export default function SessionPage() {
         sessionRef.current = session;
     }, [session]);
 
-    // Load current player ID from local storage
+    // Authentication & Restoration Logic
     useEffect(() => {
-        const storedId = sessionStorage.getItem("playerId");
-        if (!storedId) {
-            router.push(`/?joinSession=${sessionId}`);
+        // 1. Try Session Storage (Active Tab) immediately
+        const key = `ls_pid_${sessionId}`;
+        const sessionStoredId = sessionStorage.getItem(key);
+
+        if (sessionStoredId) {
+            setClientPlayerId(sessionStoredId);
             return;
         }
-        setClientPlayerId(storedId);
-    }, [router]);
+
+        // 2. If no session storage, we wait for Session Data to load before deciding
+        // (Handled in the session verification effect below)
+    }, [sessionId]);
+
+    // Verify Session & Restore from LocalStorage if Game Started
+    useEffect(() => {
+        if (!session || isLoading) return;
+
+        const key = `ls_pid_${sessionId}`;
+
+        // Case A: User has an ID (from sessionStorage)
+        if (clientPlayerId) {
+            const isPlayerInList = session.playerIds && session.playerIds.includes(clientPlayerId);
+
+            // If in Lobby and not in list, kick them (invalid state)
+            if (!session.startTime && !isPlayerInList) {
+                console.log("Player ID valid but not in session (Lobby). Redirecting...");
+                sessionStorage.removeItem(key);
+                localStorage.removeItem(key);
+                setClientPlayerId(null);
+                router.push(`/?joinSession=${sessionId}`);
+            }
+            return;
+        }
+
+        // Case B: User has NO ID (New Tab / Reopened Browser)
+        if (!clientPlayerId) {
+            if (session.startTime) {
+                // Game Started: Try to restore from LocalStorage
+                const localStoredId = localStorage.getItem(key);
+                if (localStoredId) {
+                    console.log("Game started, restoring identity from storage");
+                    sessionStorage.setItem(key, localStoredId);
+                    setClientPlayerId(localStoredId);
+                } else {
+                    // No recovery possible -> Join Screen (or maybe Spectate?)
+                    // For now, redirect to join
+                    router.push(`/?joinSession=${sessionId}`);
+                }
+            } else {
+                // Lobby: Do NOT restore from LocalStorage. Force fresh join.
+                console.log("Lobby mode: forcing fresh join for new tab");
+                router.push(`/?joinSession=${sessionId}`);
+            }
+        }
+    }, [session, clientPlayerId, isLoading, sessionId, router]);
 
 
     const fetchPlayerList = useCallback(async () => {
@@ -209,6 +257,20 @@ export default function SessionPage() {
         return [...players.slice(myIndex), ...players.slice(0, myIndex)];
     }, [players, clientPlayerId]);
 
+    const unownedProperties = useMemo(() => {
+        if (!gameState) return [];
+        const unowned: Property[] = [];
+        Object.values(City).filter(v => typeof v === 'number').forEach((val) => {
+            const city = val as City;
+            const ownedCount = gameState.properties.filter(p => p.city === city).length;
+            const remaining = 5 - ownedCount;
+            for (let i = 0; i < remaining; i++) {
+                unowned.push({ city, owner_PID: 'bank' });
+            }
+        });
+        return unowned;
+    }, [gameState]);
+
     const fetchSessionData = useCallback(async (shouldHandleLoadingState = false) => {
         try {
             const sessionData = await getSession(sessionId);
@@ -228,12 +290,14 @@ export default function SessionPage() {
                 // Pass the boardId explicitly so we don't rely on the potentially stale (or soon to be updated) session state
                 fetchGameState(sessionData.boardId);
             }
+            return sessionData;
 
         } catch (err: any) {
             console.error("Failed to fetch session:", err);
             if (shouldHandleLoadingState) {
                 setError("Failed to load session. It might not exist.");
             }
+            return null;
         } finally {
             if (shouldHandleLoadingState) {
                 setIsLoading(false);
@@ -275,11 +339,16 @@ export default function SessionPage() {
             }, 300);
         };
 
-        const onGameStarted = () => {
+        const onGameStarted = async () => {
             console.log("GameStarted event received");
-            setTimeout(() => {
-                fetchSessionData(false);
-            }, 300);
+
+            // Poll for session update confirming game start
+            // Try 5 times with 1 second delay (5 seconds total) to allow for read model consistency
+            for (let i = 0; i < 5; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const s = await fetchSessionData(false);
+                if (s?.startTime) return;
+            }
         };
 
         const onGameBoardUpdated = () => {
@@ -434,6 +503,10 @@ export default function SessionPage() {
                         );
                     });
                 })()}
+
+                <div className="absolute right-[3%] bottom-36 z-20">
+                    <DeckWidget properties={unownedProperties} />
+                </div>
 
                 <ActionBar
                     validActions={validActions}

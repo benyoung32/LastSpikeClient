@@ -23,12 +23,6 @@ function HomeContent() {
     }
   }, [joinSessionId]);
 
-  // Clear session data when returning to homepage
-  useEffect(() => {
-    sessionStorage.removeItem("playerId");
-    sessionStorage.removeItem("playerName");
-  }, []);
-
   const handleCreateSessionButton = async () => {
     if (!name.trim()) {
       setError("Please enter a name");
@@ -40,8 +34,13 @@ function HomeContent() {
       const player = await createPlayer(name);
       const session = await createSession(player.id);
 
-      sessionStorage.setItem("playerId", player.id);
-      sessionStorage.setItem("playerName", name);
+      // Save to both Session (active tab) and Local (persistence)
+      // Scoped by Session ID to allow multiple parallel sessions
+      const storageKey = `ls_pid_${session.id}`;
+      sessionStorage.setItem(storageKey, player.id);
+      localStorage.setItem(storageKey, player.id);
+
+      sessionStorage.setItem("playerName", name); // Name can be global or scoped, keeping simple for now
 
       router.push(`/session/${session.id}`);
     } catch (err: any) {
@@ -67,7 +66,10 @@ function HomeContent() {
       const player = await createPlayer(name);
       await joinSession(sessionIdToJoin, player.id);
 
-      sessionStorage.setItem("playerId", player.id);
+      const storageKey = `ls_pid_${sessionIdToJoin}`;
+      sessionStorage.setItem(storageKey, player.id);
+      localStorage.setItem(storageKey, player.id);
+
       sessionStorage.setItem("playerName", name);
 
       router.push(`/session/${sessionIdToJoin}`);
@@ -114,47 +116,24 @@ function HomeContent() {
 
           <div className="space-y-4 pt-2">
             {!isJoinFlow && (
-              <>
-                <button
-                  onClick={handleCreateSessionButton}
-                  disabled={isLoading}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? "Processing..." : "Create New Session"}
-                </button>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-zinc-800"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-zinc-900 text-zinc-500">Or join existing session</span>
-                  </div>
-                </div>
-              </>
+              <button
+                onClick={handleCreateSessionButton}
+                disabled={isLoading}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Processing..." : "Create New Session"}
+              </button>
             )}
 
-            <div className="space-y-2">
-              {!isJoinFlow && (
-                <input
-                  type="text"
-                  value={sessionIdToJoin}
-                  onChange={(e) => setSessionIdToJoin(e.target.value)}
-                  placeholder="Session ID"
-                  className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-600"
-                />
-              )}
+            {isJoinFlow && (
               <button
                 onClick={handleJoinSessionButton}
                 disabled={isLoading}
-                className={`w-full py-3.5 px-4 font-semibold rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${isJoinFlow
-                  ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-lg shadow-orange-900/20"
-                  : "bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
-                  }`}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? "Processing..." : (isJoinFlow ? "Join Session" : "Join Session")}
+                {isLoading ? "Processing..." : "Join Session"}
               </button>
-            </div>
+            )}
           </div>
         </div>
       </div>

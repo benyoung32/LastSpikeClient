@@ -6,19 +6,44 @@ interface PropertyCardProps {
     index: number;
     totalInStack: number;
     className?: string;
+    interactive?: boolean;
 }
 
-export const PropertyCard: React.FC<PropertyCardProps> = ({ property, index, totalInStack }) => {
+export const PropertyCard: React.FC<PropertyCardProps> = ({ property, index, totalInStack, className, interactive }) => {
     const color = CITY_COLORS[property.city];
     const cityValues = CITY_VALUES[property.city];
     const cityName = City[property.city];
+    const cardRef = React.useRef<HTMLDivElement>(null);
 
     // Indices 1-5 represent the payouts
     const payouts = cityValues.slice(1, 6);
 
+    const isInteractive = interactive ?? (index === totalInStack - 1);
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!cardRef.current || !isInteractive) return;
+
+        const rect = cardRef.current.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+
+        cardRef.current.style.setProperty('--mouse-x', x.toString());
+        cardRef.current.style.setProperty('--mouse-y', y.toString());
+    };
+
+    const handleMouseLeave = () => {
+        if (!cardRef.current) return;
+        cardRef.current.style.setProperty('--mouse-x', '0.5');
+        cardRef.current.style.setProperty('--mouse-y', '0.5');
+    };
+
     return (
         <div
-            className={`w-48 h-72 select-none bg-cream-100 rounded-lg shadow-xl relative overflow-hidden transition-transform ${index === totalInStack - 1 ? 'hover:scale-105' : ''}`}
+            ref={cardRef}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            className={`w-48 h-72 select-none bg-cream-100 rounded-lg shadow-xl relative overflow-hidden ${isInteractive ? 'mouse-effect-3d mouse-effect-spotlight cursor-pointer' : ''
+                } ${className || ''}`}
             style={{
                 backgroundColor: '#FFFDF5', // Creamy paper background
                 fontFamily: 'serif'

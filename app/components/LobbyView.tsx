@@ -4,7 +4,8 @@
 // TODO: add a cancel session button. this button should delete the session, clear the session storage, and kick out other players
 // TODO: the UI should be reworked. the playerlist should be on the left and the control panel on the right
 
-import { Player } from "@/types";
+import { Player, PLAYER_COLORS } from "@/types";
+import { useState } from "react";
 
 interface LobbyViewProps {
     sessionId: string;
@@ -23,17 +24,20 @@ export default function LobbyView({
     isStarting,
     onStartGame
 }: LobbyViewProps) {
+    const [copied, setCopied] = useState(false);
+
+    const copySessionUrl = () => {
+        // Use window.location.href to get the full URL including protocol and host
+        navigator.clipboard.writeText(window.location.href);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
         <main className="flex min-h-screen flex-col items-center bg-zinc-950 text-white p-6 md:p-12">
             <div className="w-full max-w-6xl space-y-8">
 
-                {/* Header */}
-                <div className="flex flex-col items-center space-y-2">
-                    <div className="flex items-center space-x-2 text-zinc-400 bg-zinc-900/50 px-4 py-1 rounded-full border border-zinc-800">
-                        <span className="text-sm select-none tracking-wider">Session ID:</span>
-                        <span className="font-mono text-white select-all">{sessionId}</span>
-                    </div>
-                </div>
+
 
                 {/* Main Grid Layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -48,14 +52,15 @@ export default function LobbyView({
                                         {isHost ? "You are the Host" : "Waiting for the host to start..."}
                                     </h2>
                                     <p className="text-zinc-500 text-lg">
-                                        Invite friends by sharing the URL or copying the Session ID.
+                                        Invite friends by sharing the URL
                                     </p>
                                 </div>
                             </div>
 
                             {/* Actions */}
-                            {isHost && (
-                                <div className="flex justify-center">
+                            {/* Actions */}
+                            <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+                                {isHost && (
                                     <button
                                         onClick={onStartGame}
                                         disabled={isStarting || players.length < 2}
@@ -63,8 +68,23 @@ export default function LobbyView({
                                     >
                                         {isStarting ? "Starting..." : "Start Game"}
                                     </button>
-                                </div>
-                            )}
+                                )}
+                                <button
+                                    onClick={copySessionUrl}
+                                    className="px-8 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-lg rounded-xl shadow-lg border border-zinc-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+                                >
+                                    {copied ? (
+                                        <>
+                                            <span className="text-green-400">✓</span>
+                                            <span>Copied!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>Copy Invite Link</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                             {isHost && players.length < 2 && (
                                 <p className="text-center text-amber-500/80 text-sm select-none">Waiting for at least one more player...</p>
                             )}
@@ -91,8 +111,11 @@ export default function LobbyView({
                                             }`}
                                     >
                                         <div
-                                            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner ${index === 0 ? "bg-amber-500 text-black" : "bg-zinc-800 text-zinc-400"
-                                                }`}
+                                            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner text-white"
+                                            style={{
+                                                backgroundColor: PLAYER_COLORS[index % PLAYER_COLORS.length],
+                                                textShadow: "0 1px 2px rgba(0,0,0,0.5)"
+                                            }}
                                         >
                                             {`P${index + 1}`}
                                         </div>

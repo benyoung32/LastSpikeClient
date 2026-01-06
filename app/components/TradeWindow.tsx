@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Player, GameState, Trade, Property, City, CITY_COLORS, PLAYER_COLORS } from "@/types";
+import { PropertyCard } from "./PropertyCard";
 
 interface TradeWindowProps {
     visible: boolean;
@@ -20,6 +21,15 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     const [requestMoney, setRequestMoney] = useState<number>(0);
     const [selectedPropertyIndices, setSelectedPropertyIndices] = useState<Set<number>>(new Set());
     const [isCounterMode, setIsCounterMode] = useState(false);
+
+    const [isMinimized, setIsMinimized] = useState(false);
+
+    // Reset minimization when trade opens/changes
+    useEffect(() => {
+        if (visible) {
+            setIsMinimized(false);
+        }
+    }, [visible, pendingTrade]);
 
     const otherPlayers = useMemo(() => players.filter(p => p.id !== currentPlayerId), [players, currentPlayerId]);
     const currentPlayer = gameState.players[currentPlayerId];
@@ -71,6 +81,53 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     if (!visible) return null;
     if (!currentPlayer) return null;
 
+    // --- MINIMIZED VIEW ---
+    if (isMinimized) {
+        let statusText = "Trade Window";
+        let subText = "";
+
+        if (isReceivingTrade && pendingTrade) {
+            const senderName = players.find(p => p.id === pendingTrade.player1Id)?.name || "Unknown";
+            if (pendingTrade.player2Id === currentPlayerId) {
+                statusText = "Trade Offer Received";
+                subText = `From ${senderName}`;
+            } else {
+                statusText = "Trade in Progress";
+                subText = "Waiting...";
+            }
+        } else {
+            statusText = isCounterMode ? "Counter Offer" : "Proposing Trade";
+            if (selectedTargetPlayerId) {
+                const targetName = players.find(p => p.id === selectedTargetPlayerId)?.name || "Unknown";
+                subText = `With ${targetName}`;
+            }
+        }
+
+        return (
+            <div
+                className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] cursor-pointer group"
+                onClick={() => setIsMinimized(false)}
+            >
+                <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-5 flex items-center gap-5 min-w-[400px] group-hover:border-zinc-500 transition-colors">
+                    <div className="bg-amber-500/10 p-3 rounded-lg">
+                        <svg className="w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-lg font-bold text-zinc-200">{statusText}</h3>
+                        {subText && <p className="text-sm text-zinc-400">{subText}</p>}
+                    </div>
+                    <div className="p-2 text-zinc-400 group-hover:text-white transition-colors">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // --- RECEIVING TRADE VIEW ---
     // --- RECEIVING TRADE VIEW (or SPECTATING) ---
     if (isReceivingTrade && pendingTrade) {
@@ -87,28 +144,46 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
         const receiverColor = getPlayerColor(pendingTrade.player2Id);
 
         return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-2xl flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
-                    <div className="p-6 border-b border-zinc-800 text-center">
-                        <h2 className="text-2xl font-bold text-zinc-100">
-                            {isRecipient ? "Trade Offer Received" : (isProposer ? "Trade Offer Sent" : "Trade in Progress")}
-                        </h2>
-                        {isRecipient ? (
-                            <p className="text-zinc-400 mt-1">from <span style={{ color: senderColor }} className="font-bold">{senderName}</span></p>
-                        ) : (
-                            <p className="text-zinc-400 mt-1">
-                                <span style={{ color: senderColor }} className="font-bold">{senderName}</span>
-                                <span className="mx-2 text-zinc-600">to</span>
-                                <span style={{ color: receiverColor }} className="font-bold">{receiverName}</span>
-                            </p>
-                        )}
+            <div
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                onClick={() => setIsMinimized(true)}
+            >
+                <div
+                    className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-2xl flex flex-col shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="p-6 border-b border-zinc-800 flex justify-between items-start">
+                        <div className="text-center flex-1">
+                            <h2 className="text-2xl font-bold text-zinc-100">
+                                {isRecipient ? "Trade Offer Received" : (isProposer ? "Trade Offer Sent" : "Trade in Progress")}
+                            </h2>
+                            {isRecipient ? (
+                                <p className="text-zinc-400 mt-1">from <span style={{ color: senderColor }} className="font-bold">{senderName}</span></p>
+                            ) : (
+                                <p className="text-zinc-400 mt-1">
+                                    <span style={{ color: senderColor }} className="font-bold">{senderName}</span>
+                                    <span className="mx-2 text-zinc-600">to</span>
+                                    <span style={{ color: receiverColor }} className="font-bold">{receiverName}</span>
+                                </p>
+                            )}
+                        </div>
+                        {/* Minimize Button */}
+                        <button
+                            onClick={() => setIsMinimized(true)}
+                            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1"
+                            title="Minimize"
+                        >
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                            </svg>
+                        </button>
                     </div>
 
                     <div className="p-8 grid grid-cols-2 gap-8 relative">
                         {/* Arrow Icon in center */}
                         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-800 rounded-full p-2 border border-zinc-700 z-10">
-                            <svg className="w-6 h-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            <svg className="w-8 h-6 text-zinc-400" fill="none" viewBox="0 0 32 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5l-7 7l7 7M4 12h24M21 5l7 7l-7 7" />
                             </svg>
                         </div>
                         <div className="bg-zinc-950/50 p-6 rounded-xl border border-zinc-800 text-center">
@@ -119,15 +194,21 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                                 {pendingTrade.player1Money > 0 && (
                                     <div className="text-2xl font-bold text-green-400">${pendingTrade.player1Money.toLocaleString()}</div>
                                 )}
-                                <div className="space-y-2">
+                                <div className="flex flex-wrap gap-4 justify-center">
                                     {offeredProperties.map((p, i) => (
-                                        <div key={i} className="inline-flex items-center px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-sm">
-                                            <div className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: CITY_COLORS[p.city] }} />
-                                            {City[p.city]}
+                                        <div key={i} className="relative w-[144px] h-[216px]">
+                                            <div className="absolute top-0 left-0 transform scale-75 origin-top-left">
+                                                <PropertyCard
+                                                    property={p}
+                                                    index={i}
+                                                    totalInStack={offeredProperties.length}
+                                                    interactive={true}
+                                                />
+                                            </div>
                                         </div>
                                     ))}
                                     {offeredProperties.length === 0 && pendingTrade.player1Money === 0 && (
-                                        <div className="text-zinc-600 italic text-sm">Nothing</div>
+                                        <div className="text-zinc-600 italic text-sm w-full">Nothing</div>
                                     )}
                                 </div>
                             </div>
@@ -141,15 +222,21 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                                 {pendingTrade.player2Money > 0 && (
                                     <div className="text-2xl font-bold text-green-400">${pendingTrade.player2Money.toLocaleString()}</div>
                                 )}
-                                <div className="space-y-2">
+                                <div className="flex flex-wrap gap-4 justify-center">
                                     {requestedProperties.map((p, i) => (
-                                        <div key={i} className="inline-flex items-center px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-sm">
-                                            <div className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: CITY_COLORS[p.city] }} />
-                                            {City[p.city]}
+                                        <div key={i} className="relative w-[144px] h-[216px]">
+                                            <div className="absolute top-0 left-0 transform scale-75 origin-top-left">
+                                                <PropertyCard
+                                                    property={p}
+                                                    index={i}
+                                                    totalInStack={requestedProperties.length}
+                                                    interactive={true}
+                                                />
+                                            </div>
                                         </div>
                                     ))}
                                     {requestedProperties.length === 0 && pendingTrade.player2Money === 0 && (
-                                        <div className="text-zinc-600 italic text-sm">Nothing</div>
+                                        <div className="text-zinc-600 italic text-sm w-full">Nothing</div>
                                     )}
                                 </div>
                             </div>
@@ -248,17 +335,36 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
     const maxRequestMoney = targetPlayer?.money || 0;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setIsMinimized(true)}
+        >
+            <div
+                className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-[95vw] max-h-[95vh] overflow-y-auto flex flex-col shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
 
                 {/* Header */}
                 <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-zinc-100">
                         {isCounterMode ? "Counter Offer" : "Propose Trade"}
                     </h2>
-                    <button onClick={() => { setIsCounterMode(false); onClose(); }} className="text-zinc-400 hover:text-white">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Minimize Button */}
+                        <button
+                            onClick={() => setIsMinimized(true)}
+                            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                            title="Minimize"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                            </svg>
+                        </button>
+                        {/* Close Button */}
+                        <button onClick={() => { setIsCounterMode(false); onClose(); }} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="p-6 space-y-8">
@@ -352,29 +458,35 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                                 {myProperties.length === 0 ? (
                                     <div className="text-sm text-zinc-600 italic">No properties to offer</div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2">
+                                    <div className="flex flex-wrap gap-4 h-[500px] overflow-y-auto pr-2 content-start border border-zinc-900/50 rounded-lg p-2 bg-zinc-900/30">
                                         {myProperties.map(({ property, index }) => {
                                             const isSelected = selectedPropertyIndices.has(index);
 
                                             return (
-                                                <button
+                                                <div
                                                     key={index}
                                                     onClick={() => toggleProperty(index)}
                                                     className={`
-                                                        relative p-3 rounded border text-left transition-all
+                                                        relative transition-all cursor-pointer rounded-lg
                                                         ${isSelected
-                                                            ? "bg-zinc-800 border-amber-500/50 ring-1 ring-amber-500/50"
-                                                            : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"}
+                                                            ? "ring-4 ring-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-95"
+                                                            : "hover:scale-105 hover:z-10 opacity-90 hover:opacity-100"}
                                                     `}
                                                 >
-                                                    <div
-                                                        className="absolute left-0 top-0 bottom-0 w-1 rounded-l"
-                                                        style={{ backgroundColor: CITY_COLORS[property.city] }}
-                                                    />
-                                                    <span className="ml-2 text-sm font-medium text-zinc-200">
-                                                        {City[property.city]}
-                                                    </span>
-                                                </button>
+                                                    <div className="transform scale-75 origin-top-left w-[144px] h-[216px] bg-transparent">
+                                                        <PropertyCard
+                                                            property={property}
+                                                            index={0}
+                                                            totalInStack={1}
+                                                            interactive={true}
+                                                            className="shadow-none"
+                                                        />
+                                                    </div>
+                                                    {/* Overlay to indicate selection clearly if needed, or rely on ring */}
+                                                    {isSelected && (
+                                                        <div className="absolute inset-0 bg-amber-500/10 pointer-events-none" />
+                                                    )}
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -428,29 +540,34 @@ export default function TradeWindow({ visible, onClose, onSubmit, currentPlayerI
                                         {selectedTargetPlayerId ? "They have no properties" : "Select a player first"}
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2">
+                                    <div className="flex flex-wrap gap-4 h-[500px] overflow-y-auto pr-2 content-start border border-zinc-900/50 rounded-lg p-2 bg-zinc-900/30">
                                         {theirProperties.map(({ property, index }) => {
                                             const isSelected = selectedPropertyIndices.has(index);
 
                                             return (
-                                                <button
+                                                <div
                                                     key={index}
                                                     onClick={() => toggleProperty(index)}
                                                     className={`
-                                                        relative p-3 rounded border text-left transition-all
+                                                        relative transition-all cursor-pointer rounded-lg
                                                         ${isSelected
-                                                            ? "bg-zinc-800 border-blue-500/50 ring-1 ring-blue-500/50"
-                                                            : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"}
+                                                            ? "ring-4 ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)] scale-95"
+                                                            : "hover:scale-105 hover:z-10 opacity-90 hover:opacity-100"}
                                                     `}
                                                 >
-                                                    <div
-                                                        className="absolute left-0 top-0 bottom-0 w-1 rounded-l"
-                                                        style={{ backgroundColor: CITY_COLORS[property.city] }}
-                                                    />
-                                                    <span className="ml-2 text-sm font-medium text-zinc-200">
-                                                        {City[property.city]}
-                                                    </span>
-                                                </button>
+                                                    <div className="transform scale-75 origin-top-left w-[144px] h-[216px] bg-transparent">
+                                                        <PropertyCard
+                                                            property={property}
+                                                            index={0}
+                                                            totalInStack={1}
+                                                            interactive={true}
+                                                            className="shadow-none"
+                                                        />
+                                                    </div>
+                                                    {isSelected && (
+                                                        <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                                                    )}
+                                                </div>
                                             );
                                         })}
                                     </div>
