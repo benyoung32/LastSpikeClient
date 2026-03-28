@@ -483,7 +483,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
     };
 
     return (
-        <main className="flex h-screen w-full flex-col bg-stone-800 text-white overflow-hidden font-cute items-center justify-center p-4 select-none">
+        <main className="flex h-screen w-full flex-col text-white overflow-hidden font-cute items-center justify-center p-4 select-none">
             <div className="relative w-full max-w-[calc(80vh*14/9)] aspect-[14/9] shadow-2xl rounded-xl border border-stone-400 overflow-hidden">
                 <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -614,8 +614,8 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     <line
                                         x1={lineStartX} y1={lineStartY} x2={end.x} y2={end.y}
                                         stroke={isValid ? "#fbbf24" : "#71717a"}
-                                        strokeWidth={isValid ? 3 : 3}
-                                        className={`transition-all duration-200 ${isValid ? 'group-hover:stroke-[6px]' : ''}`}
+                                        strokeWidth={isValid ? 7 : 5}
+                                        className={`transition-all duration-200 ${isValid ? 'group-hover:stroke-[9px]' : ''}`}
                                     />
                                     {/* Built Track Segments */}
                                     {numTracks > 0 && (

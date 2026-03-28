@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPlayer, createSession, joinSession } from "@/lib/api";
 import { useSignalR } from "@/app/context/SignalRContext";
@@ -15,6 +15,7 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { connection } = useSignalR();
+  const isMounted = useRef(true);
 
   // Update session ID if URL param changes
   useEffect(() => {
@@ -23,31 +24,61 @@ function HomeContent() {
     }
   }, [joinSessionId]);
 
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const isRetryableError = (errMessage: string) => {
+    if (!errMessage) return false;
+    const msg = errMessage.toLowerCase();
+    return msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("network error");
+  };
+
   const handleCreateSessionButton = async () => {
     if (!name.trim()) {
       setError("Please enter a name");
       return;
     }
+    if (name.trim().length > 15) {
+      setError("Name must be 15 characters or less");
+      return;
+    }
     setIsLoading(true);
     setError(null);
-    try {
-      const player = await createPlayer(name);
-      const session = await createSession(player.id);
 
-      // Save to both Session (active tab) and Local (persistence)
-      // Scoped by Session ID to allow multiple parallel sessions
-      const storageKey = `ls_pid_${session.id}`;
-      sessionStorage.setItem(storageKey, player.id);
-      localStorage.setItem(storageKey, player.id);
+    while (isMounted.current) {
+      try {
+        const player = await createPlayer(name);
+        if (!isMounted.current) return;
 
-      sessionStorage.setItem("playerName", name); // Name can be global or scoped, keeping simple for now
+        const session = await createSession(player.id);
+        if (!isMounted.current) return;
 
-      router.push(`/session/${session.id}`);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to create session");
-    } finally {
-      setIsLoading(false);
+        // Save to both Session (active tab) and Local (persistence)
+        // Scoped by Session ID to allow multiple parallel sessions
+        const storageKey = `ls_pid_${session.id}`;
+        sessionStorage.setItem(storageKey, player.id);
+        localStorage.setItem(storageKey, player.id);
+
+        sessionStorage.setItem("playerName", name); // Name can be global or scoped, keeping simple for now
+
+        router.push(`/session/${session.id}`);
+        return; // Success, exit
+      } catch (err: any) {
+        console.error(err);
+        if (isRetryableError(err.message)) {
+          if (isMounted.current) setError("Server is starting, retrying in 15s");
+          await new Promise(resolve => setTimeout(resolve, 15000));
+        } else {
+          if (isMounted.current) {
+            setError(err.message || "Failed to create session");
+            setIsLoading(false);
+          }
+          return; // Unrecoverable error, exit
+        }
+      }
     }
   };
 
@@ -56,35 +87,53 @@ function HomeContent() {
       setError("Please enter a name");
       return;
     }
+    if (name.trim().length > 15) {
+      setError("Name must be 15 characters or less");
+      return;
+    }
     if (!sessionIdToJoin.trim()) {
       setError("Please enter a Session ID");
       return;
     }
     setIsLoading(true);
     setError(null);
-    try {
-      const player = await createPlayer(name);
-      await joinSession(sessionIdToJoin, player.id);
 
-      const storageKey = `ls_pid_${sessionIdToJoin}`;
-      sessionStorage.setItem(storageKey, player.id);
-      localStorage.setItem(storageKey, player.id);
+    while (isMounted.current) {
+      try {
+        const player = await createPlayer(name);
+        if (!isMounted.current) return;
 
-      sessionStorage.setItem("playerName", name);
+        await joinSession(sessionIdToJoin, player.id);
+        if (!isMounted.current) return;
 
-      router.push(`/session/${sessionIdToJoin}`);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to join session");
-    } finally {
-      setIsLoading(false);
+        const storageKey = `ls_pid_${sessionIdToJoin}`;
+        sessionStorage.setItem(storageKey, player.id);
+        localStorage.setItem(storageKey, player.id);
+
+        sessionStorage.setItem("playerName", name);
+
+        router.push(`/session/${sessionIdToJoin}`);
+        return; // Success, exit
+      } catch (err: any) {
+        console.error(err);
+        if (isRetryableError(err.message)) {
+          if (isMounted.current) setError("Server is starting, retrying in 15s");
+          await new Promise(resolve => setTimeout(resolve, 15000));
+        } else {
+          if (isMounted.current) {
+            setError(err.message || "Failed to join session");
+            setIsLoading(false);
+          }
+          return; // Unrecoverable error, exit
+        }
+      }
     }
   };
 
   const isJoinFlow = !!joinSessionId;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-black text-white p-4">
+    <main className="flex min-h-screen flex-col items-center justify-center text-white p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-600">
@@ -109,10 +158,14 @@ function HomeContent() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              maxLength={15}
               placeholder="Enter your name"
               className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-600"
+              disabled={isLoading}
             />
           </div>
+
+          {/* Session ID input removed as it's passed via URL param */}
 
           <div className="space-y-4 pt-2">
             {!isJoinFlow && (
@@ -121,7 +174,7 @@ function HomeContent() {
                 disabled={isLoading}
                 className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? "Processing..." : "Create New Session"}
+                {isLoading ? "Creating Session..." : "Create New Session"}
               </button>
             )}
 
@@ -131,7 +184,7 @@ function HomeContent() {
                 disabled={isLoading}
                 className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-lg shadow-lg shadow-orange-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? "Processing..." : "Join Session"}
+                {isLoading ? "Joining..." : "Join Session"}
               </button>
             )}
           </div>
@@ -143,7 +196,7 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-white">Loading...</div>}>
       <HomeContent />
     </Suspense>
   );

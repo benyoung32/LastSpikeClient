@@ -6,6 +6,7 @@
 
 import { Player, PLAYER_COLORS } from "@/types";
 import { useState } from "react";
+import { GameRulesWidget } from "@/app/components/GameRulesWidget";
 
 interface LobbyViewProps {
     sessionId: string;
@@ -34,8 +35,11 @@ export default function LobbyView({
     };
 
     return (
-        <main className="flex min-h-screen flex-col items-center bg-zinc-950 text-white p-6 md:p-12">
-            <div className="w-full max-w-6xl space-y-8">
+        <main className="flex min-h-screen flex-col items-center justify-center text-white p-6 md:p-12 relative overflow-x-hidden">
+            <div className="absolute left-6 top-6 sm:left-8 sm:top-8 z-50">
+                <GameRulesWidget />
+            </div>
+            <div className="w-full max-w-6xl space-y-8 relative z-10">
 
 
 
@@ -43,8 +47,8 @@ export default function LobbyView({
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* Left Column: Game Status & Actions */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-xl flex flex-col justify-center min-h-[300px] space-y-8">
+                    <div className="lg:col-span-2 h-full">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-xl flex flex-col justify-center h-full space-y-8">
                             {/* Status Message */}
                             <div className="text-center space-y-4">
                                 <div className="space-y-4">
@@ -58,8 +62,7 @@ export default function LobbyView({
                             </div>
 
                             {/* Actions */}
-                            {/* Actions */}
-                            <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+                            <div className="flex flex-col lg:flex-row items-center justify-center gap-4">
                                 {isHost && (
                                     <button
                                         onClick={onStartGame}
@@ -92,7 +95,7 @@ export default function LobbyView({
                     </div>
 
                     {/* Right Column: Player List */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 h-full">
                         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl h-full flex flex-col">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-lg font-bold text-white select-none">Players</h3>

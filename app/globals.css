@@ -22,9 +22,19 @@
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: "Fredoka", Arial, Helvetica, sans-serif;
+}
+
+* {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: auto;
+  -webkit-user-select: auto;
 }
 
 /* Custom Animations */
@@ -119,4 +129,15 @@ body {
 
 .mouse-effect-spotlight:hover::after {
   opacity: 1;
+}
+
+/* Scrolling Background */
+@keyframes scroll-bg {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: -500px -1000px;
+  }
 }

@@ -14,6 +14,7 @@ import GameOverScreen from "@/app/components/GameOverScreen";
 import TradeWindow from "@/app/components/TradeWindow";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { DeckWidget } from "@/app/components/DeckWidget";
+import { GameRulesWidget } from "@/app/components/GameRulesWidget";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -417,7 +418,7 @@ export default function SessionPage() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-black text-white">
+            <div className="flex min-h-screen items-center justify-center text-white">
                 <div className="animate-pulse text-xl text-zinc-400">Loading Lobby...</div>
             </div>
         );
@@ -425,7 +426,7 @@ export default function SessionPage() {
 
     if (error) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-black text-white">
+            <div className="flex min-h-screen items-center justify-center text-white">
                 <div className="text-red-400">{error}</div>
                 <button onClick={() => router.push("/")} className="ml-4 underline text-zinc-400">Go Home</button>
             </div>
@@ -506,6 +507,10 @@ export default function SessionPage() {
 
                 <div className="absolute right-[3%] bottom-36 z-20">
                     <DeckWidget properties={unownedProperties} />
+                </div>
+
+                <div className={`absolute z-50 transition-all duration-500 ${players.length >= 4 ? 'left-6 top-32 sm:left-8 sm:top-36' : 'left-6 top-6 sm:left-8 sm:top-8'}`}>
+                    <GameRulesWidget />
                 </div>
 
                 <ActionBar

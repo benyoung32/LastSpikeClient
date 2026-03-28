@@ -1,6 +1,6 @@
 import React from 'react';
 import { Player, PlayerState } from '@/types';
-import { useRouter } from 'next/navigation';
+
 
 interface GameOverScreenProps {
     players: Player[];

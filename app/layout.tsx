@@ -31,11 +31,27 @@ export default function RootLayout({
   return (
     <html lang="en" >
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased font-cute overflow-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased font-cute overflow-hidden text-white select-none`}
       >
-        <SignalRProvider>
-          {children}
-        </SignalRProvider>
+        {/* Background */}
+        <div className="fixed inset-0 bg-gradient-to-b from-stone-800 to-zinc-900 z-0 pointer-events-none" />
+        <div
+          className="fixed inset-0 z-0 pointer-events-none opacity-10"
+          style={{
+            backgroundImage: "url('/rail-bg.png')",
+            backgroundRepeat: "repeat",
+            backgroundSize: "250px 250px",
+            animation: "scroll-bg 300s linear infinite",
+            transform: "rotate(-10deg) scale(2)"
+          }}
+        />
+
+        {/* Main Content */}
+        <div className="relative z-10 w-full h-full min-h-screen">
+          <SignalRProvider>
+            {children}
+          </SignalRProvider>
+        </div>
       </body>
     </html >
   );
