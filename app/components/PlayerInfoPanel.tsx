@@ -74,7 +74,7 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
     return (
         <div
             id={`player-panel-${player.id}`}
-            className={`absolute flex flex-row items-center gap-2 px-5 py-2 bg-slate-900/90 backdrop-blur-md rounded-full border shadow-xl transition-all duration-300 ${screenPosition}`}
+            className={`absolute flex flex-row items-center gap-2 px-5 py-2 bg-slate-900/95 rounded-full border shadow-xl transition-all duration-300 ${screenPosition}`}
             style={{
                 borderColor: color,
                 boxShadow: `0 0 15px ${color}40`,

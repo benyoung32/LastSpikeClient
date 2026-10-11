@@ -6,9 +6,10 @@ interface GameOverScreenProps {
     players: Player[];
     playerStates: Record<string, PlayerState>;
     onReturnHome: () => void;
+    onViewResults?: () => void;
 }
 
-const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, onReturnHome }) => {
+const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, onReturnHome, onViewResults }) => {
     // 1. Combine player info with their state (money)
     const rankedPlayers = players.map(player => {
         const state = playerStates[player.id];
@@ -61,12 +62,25 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, 
                 ))}
             </div>
 
-            <button
-                onClick={onReturnHome}
-                className="px-8 py-3 bg-zinc-100 text-black text-lg font-bold rounded hover:bg-white hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-            >
-                Return to Home
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+                {onViewResults && (
+                    <button
+                        id="game-over-view-results-button"
+                        onClick={onViewResults}
+                        className="px-8 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-zinc-950 text-lg font-bold rounded-lg hover:from-amber-400 hover:to-yellow-400 hover:scale-105 transition-all shadow-[0_0_20px_rgba(245,158,11,0.4)] flex items-center gap-2 cursor-pointer"
+                    >
+                        <span>Results</span>
+                    </button>
+                )}
+
+                <button
+                    id="game-over-return-home-button"
+                    onClick={onReturnHome}
+                    className="px-8 py-3 bg-zinc-800 text-zinc-200 border border-zinc-700 text-lg font-bold rounded-lg hover:bg-zinc-700 hover:text-white hover:scale-105 transition-all shadow-md cursor-pointer"
+                >
+                    Home
+                </button>
+            </div>
         </div>
     );
 };

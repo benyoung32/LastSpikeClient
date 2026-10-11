@@ -146,4 +146,35 @@ export const PLAYER_COLORS = [
     "#ec4899",
 ];
 
+export interface PlayerTurnDiff {
+    money?: number;
+    boardPosition?: number;
+    skipNextTurn?: boolean;
+}
+
+export interface RouteDiff {
+    cityPair: {
+        city1: string;
+        city2: string;
+    };
+    numTracks: number;
+}
+
+export interface PropertyDiff {
+    city: string;
+    owner_PID: string;
+}
+
+export interface GameHistoryTurnDiff {
+    turn: number;
+    players?: Record<string, PlayerTurnDiff>;
+    routes?: RouteDiff[];
+    properties?: PropertyDiff[];
+    isGameOver?: boolean;
+    dice1?: number;
+    dice2?: number;
+    currentPlayerId?: string;
+    [key: string]: unknown;
+}
+
 

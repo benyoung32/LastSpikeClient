@@ -71,7 +71,7 @@ test('Generate README Images', async ({ browser }) => {
 
     // Wait for game to start (gameState check)
     // Using a more robust check: Wait for the game board SVG to appear
-    await expect(hostPage.locator('svg')).first().toBeVisible({ timeout: 20000 });
+    await expect(hostPage.locator('svg').first()).toBeVisible({ timeout: 20000 });
 
     // Wait a bit for the board animation/rendering to settle
     await hostPage.waitForTimeout(3000);

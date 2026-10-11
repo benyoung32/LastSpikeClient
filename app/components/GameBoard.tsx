@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
-import { Player, Route, SessionData, City, SpaceType, GameState, Property, CITY_COLORS, PLAYER_COLORS } from "@/types";
+import { Player, Route, SessionData, City, SpaceType, GameState, CITY_COLORS, PLAYER_COLORS } from "@/types";
 import { SPACES, VALID_CITY_PAIRS } from "@/lib/gameConstants";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { PropertyCard } from "./PropertyCard";
@@ -11,15 +11,18 @@ import { DiceRollAnimation } from "./DiceRollAnimation";
 
 
 interface GameBoardProps {
-    session: SessionData;
+    session?: SessionData;
     players: Player[];
     currentPlayerId: string | null;
     gameState: GameState | null;
-    onRouteSelect: (route: Route) => void;
-    validRoutes: Route[];
+    onRouteSelect?: (route: Route) => void;
+    validRoutes?: Route[];
     highlightWinningPath?: boolean;
     isClientRolling?: boolean;
     onRollResolved?: () => void;
+    isReplay?: boolean;
+    disableSounds?: boolean;
+    className?: string;
 }
 
 // Layout Constants for Internal SVG Coordinate System (1600x900)
@@ -184,18 +187,29 @@ interface PlayerTokenProps {
     offset: { x: number, y: number };
     addSound: (sound: string) => void;
     getSoundDuration: (sound: string) => number;
+    isReplay?: boolean;
 }
 
-const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, getSoundDuration }: PlayerTokenProps) => {
+const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, getSoundDuration, isReplay = false }: PlayerTokenProps) => {
     const controls = useAnimation();
     const prevPositionRef = useRef<number>(boardPosition);
 
     useEffect(() => {
+        if (isReplay) {
+            const center = getSpaceCenter(boardPosition);
+            controls.set({
+                x: center.x + offset.x,
+                y: center.y + offset.y
+            });
+            prevPositionRef.current = boardPosition;
+            return;
+        }
+
         const prevPos = prevPositionRef.current;
         const currentPos = boardPosition;
 
         if (prevPos !== currentPos) {
-            let steps: number[] = [];
+            const steps: number[] = [];
 
             if (currentPos > prevPos) {
                 for (let i = prevPos; i <= currentPos; i++) {
@@ -266,19 +280,19 @@ const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, ge
                 transition: { duration: 0.5, ease: "easeInOut" }
             });
         }
-    }, [boardPosition, offset, controls, playerId, addSound]);
+    }, [boardPosition, offset, controls, playerId, addSound, getSoundDuration, isReplay]);
 
-    // Initial position for first render (no animation needed? Or animate from 0,0?)
-    // to avoid jump, we can set initial to the target.
+    // Initial position for first render
     const initialPos = useMemo(() => {
         const center = getSpaceCenter(boardPosition);
         return { x: center.x + offset.x, y: center.y + offset.y + 20 };
-    }, []); // Run once
+    }, [boardPosition, offset.x, offset.y]);
 
     return (
         <motion.g
             initial={initialPos}
             animate={controls}
+            style={{ willChange: "transform" }}
         >
             {/* Token Body - 3D Cylinder with Hole */}
             <g filter="url(#token-shadow)">
@@ -328,74 +342,117 @@ const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, ge
         prev.color === next.color &&
         prev.boardPosition === next.boardPosition &&
         prev.offset.x === next.offset.x &&
-        prev.offset.y === next.offset.y
+        prev.offset.y === next.offset.y &&
+        prev.isReplay === next.isReplay
     );
 });
+PlayerToken.displayName = "PlayerToken";
 
+interface ReplayPlayerTokenProps {
+    color: string;
+    boardPosition: number;
+    offset: { x: number; y: number };
+}
 
-export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes, highlightWinningPath = false, isClientRolling = false, onRollResolved }: GameBoardProps) {
+const ReplayPlayerToken = memo(({ color, boardPosition, offset }: ReplayPlayerTokenProps) => {
+    const center = getSpaceCenter(boardPosition);
+    return (
+        <g transform={`translate(${center.x + offset.x}, ${center.y + offset.y})`} style={{ willChange: "transform" }}>
+            {/* Token Body - 3D Cylinder with Hole */}
+            <g filter="url(#token-shadow)">
+                <path
+                    d="M -20,0 L -20,16 A 20,18 0 0 0 20,16 L 20,0 Z"
+                    fill={color}
+                    stroke="none"
+                    style={{ filter: "brightness(0.75)" }}
+                />
+                <ellipse
+                    cx={0}
+                    cy={0}
+                    rx={11}
+                    ry={9}
+                    fill={color}
+                    stroke="none"
+                    style={{ filter: "brightness(0.4)" }}
+                />
+                <path
+                    d="M -20,0 A 20,18 0 1 0 20,0 A 20,18 0 1 0 -20,0 Z M -11,0 A 11,9 0 1 0 11,0 A 11,9 0 1 0 -11,0 Z"
+                    fill={color}
+                    fillRule="evenodd"
+                    stroke="none"
+                />
+                <ellipse
+                    cx={0}
+                    cy={-14}
+                    rx={11}
+                    ry={2}
+                    fill="white"
+                    fillOpacity={0.25}
+                    stroke="none"
+                />
+            </g>
+        </g>
+    );
+});
+ReplayPlayerToken.displayName = "ReplayPlayerToken";
+
+const GameBoard = memo(function GameBoard({
+    players,
+    gameState,
+    onRouteSelect = () => { },
+    validRoutes = [],
+    highlightWinningPath = false,
+    isClientRolling = false,
+    onRollResolved,
+    isReplay = false,
+    disableSounds = false,
+    className
+}: GameBoardProps) {
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
     const [hoveredSpace, setHoveredSpace] = useState<{ type: SpaceType; cost: number; x: number; y: number } | null>(null);
-    const [winningPath, setWinningPath] = useState<Route[]>([]);
-
 
     const { addSound, getSoundDuration } = useGameSounds();
     const prevGameStateRef = useRef<GameState | null>(null);
 
-    // Pathfinding Effect
-    useEffect(() => {
-        // DEBUG: Trace prop and state
-        console.log("GameBoard: highlightWinningPath changed to:", highlightWinningPath);
+    // Pathfinding Derived Winning Path
+    const winningPath = useMemo<Route[]>(() => {
+        if (!highlightWinningPath || !gameState) return [];
 
-        if (highlightWinningPath && gameState) {
-            console.log("GameBoard: Starting Pathfinding BFS...");
-            // BFS to find path from Vancouver to Montreal
-            const startCity = City.Vancouver;
-            const endCity = City.Montreal;
+        // BFS to find path from Vancouver to Montreal
+        const startCity = City.Vancouver;
+        const endCity = City.Montreal;
 
-            const queue: { city: City; path: Route[] }[] = [{ city: startCity, path: [] }];
-            const visited = new Set<City>();
-            visited.add(startCity);
+        const queue: { city: City; path: Route[] }[] = [{ city: startCity, path: [] }];
+        const visited = new Set<City>();
+        visited.add(startCity);
 
-            let foundPath: Route[] = [];
+        while (queue.length > 0) {
+            const { city, path } = queue.shift()!;
 
-            while (queue.length > 0) {
-                const { city, path } = queue.shift()!;
-
-                if (city === endCity) {
-                    foundPath = path;
-                    console.log("GameBoard: Path Found!", path);
-                    break;
-                }
-
-                // Find connected routes
-                const connectedRoutes = gameState.routes.filter(r =>
-                    r.numTracks === 4 &&
-                    (r.cityPair.city1 === city || r.cityPair.city2 === city)
-                );
-
-                for (const route of connectedRoutes) {
-                    const nextCity = route.cityPair.city1 === city ? route.cityPair.city2 : route.cityPair.city1;
-                    if (!visited.has(nextCity)) {
-                        visited.add(nextCity);
-                        queue.push({ city: nextCity, path: [...path, route] });
-                    }
-                }
+            if (city === endCity) {
+                return path;
             }
 
-            if (foundPath.length === 0) {
-                console.warn("GameBoard: No winning path found between Vancouver and Montreal.");
-            }
+            // Find connected routes
+            const connectedRoutes = gameState.routes.filter(r =>
+                r.numTracks === 4 &&
+                (r.cityPair.city1 === city || r.cityPair.city2 === city)
+            );
 
-            setWinningPath(foundPath);
-        } else {
-            console.log("GameBoard: highlightWinningPath is false or gameState missing. Clearing path.");
-            setWinningPath([]);
+            for (const route of connectedRoutes) {
+                const nextCity = route.cityPair.city1 === city ? route.cityPair.city2 : route.cityPair.city1;
+                if (!visited.has(nextCity)) {
+                    visited.add(nextCity);
+                    queue.push({ city: nextCity, path: [...path, route] });
+                }
+            }
         }
+
+        return [];
     }, [highlightWinningPath, gameState]);
 
     useEffect(() => {
-        if (!gameState) return;
+        if (!gameState || isReplay || disableSounds) return;
 
         const prevGameState = prevGameStateRef.current;
 
@@ -438,7 +495,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
 
         // Update Ref
         prevGameStateRef.current = JSON.parse(JSON.stringify(gameState));
-    }, [gameState, addSound]);
+    }, [gameState, addSound, disableSounds, isReplay]);
 
     const playerGroups = useMemo(() => {
         const groups: Record<number, string[]> = {};
@@ -484,19 +541,24 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
         return PLAYER_COLORS[index % PLAYER_COLORS.length];
     };
 
+    const rootClasses = className !== undefined
+        ? className
+        : "flex h-screen w-full flex-col text-white overflow-hidden font-cute items-center justify-center p-4 select-none";
+
     return (
-        <main className="flex h-screen w-full flex-col text-white overflow-hidden font-cute items-center justify-center p-4 select-none">
-            <div className="relative w-full max-w-[calc(80vh*14/9)] aspect-[14/9] shadow-2xl rounded-xl border border-stone-400 overflow-hidden">
+        <main className={rootClasses}>
+            <div className={`relative w-full ${isReplay ? "max-w-[calc((100vh-210px)*14/9)] max-h-[calc(100vh-210px)]" : "max-w-[calc(80vh*14/9)]"} aspect-[14/9] shadow-2xl rounded-xl border border-stone-400 overflow-hidden`}>
                 <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
                     preserveAspectRatio="xMidYMid meet"
+                    className={isReplay ? "w-full h-full block" : undefined}
                 >
                     {/* --- Helper Definitions (Gradients, Filters) --- */}
                     <defs>
                         {/* Board Vignette */}
                         <radialGradient id="board-grad" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
                             <stop offset="0%" stopColor="#eedece" />
-                            <stop offset="100%" stopColor="#d4c5b0" />
+                            <stop offset="100%" stopColor="#D7C8B3" />
                         </radialGradient>
 
                         {/* Space Tile Gradient (glassy/convex look) */}
@@ -511,31 +573,25 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                             <feComposite in="SourceGraphic" in2="blur" operator="over" />
                         </filter>
 
-                        <filter id="token-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="2" dy="4" stdDeviation="2" floodColor="#000000" floodOpacity="0.4" />
-                        </filter>
-
-                        <filter id="inner-map-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#5c4d3c" floodOpacity="0.3" />
-                        </filter>
-
-                        <filter id="text-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="2" dy="2" stdDeviation="1" floodColor="#000000" floodOpacity="0.6" />
-                        </filter>
-
-                        {/* Paper Texture Filter */}
-                        <filter id="paper-texture">
-                            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" result="noise" />
-                            <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.05 0" in="noise" result="coloredNoise" />
-                            <feComposite operator="in" in="coloredNoise" in2="SourceGraphic" result="composite" />
-                            <feBlend mode="multiply" in="composite" in2="SourceGraphic" />
+                        {/* Lightweight Token Shadow for 3D tokens only */}
+                        <filter id="token-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                            <feDropShadow dx="1" dy="3" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.4" />
                         </filter>
                     </defs>
 
                     {/* Board Background */}
-                    <rect x="0" y="0" width="100%" height="100%" fill="url(#board-grad)" filter="url(#paper-texture)" />
+                    <rect x="0" y="0" width="100%" height="100%" fill="url(#board-grad)" />
 
                     {/* Inner Map Separation Area */}
+                    <rect
+                        x={MAP_LEFT - 69}
+                        y={MAP_TOP + 3}
+                        width={MAP_WIDTH + 140}
+                        height={MAP_HEIGHT}
+                        rx="30"
+                        fill="rgba(0,0,0,0.12)"
+                        className="pointer-events-none"
+                    />
                     <rect
                         x={MAP_LEFT - 70}
                         y={MAP_TOP}
@@ -544,7 +600,8 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                         rx="30"
                         fill="#e6dccd"
                         opacity="0.6"
-                        filter="url(#inner-map-shadow)"
+                        stroke="#c9bcab"
+                        strokeWidth="1"
                     />
 
                     {/* --- Routes (Tracks) --- */}
@@ -621,7 +678,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     />
                                     {/* Built Track Segments */}
                                     {numTracks > 0 && (
-                                        <g filter="url(#token-shadow)">
+                                        <g>
                                             {Array.from({ length: numTracks }).map((_, tIdx) => {
                                                 const t = (tIdx + 0.5) / 4.0;
                                                 const cx = start.x + dx * t;
@@ -738,6 +795,14 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     className="cursor-pointer group"
                                     style={{ transformOrigin: `${pos.x}px ${pos.y}px` }}
                                 >
+                                    {/* Crisp Shadow Circle */}
+                                    <circle
+                                        cx={pos.x + 2}
+                                        cy={pos.y + 2}
+                                        r={CITY_RADIUS + 3}
+                                        fill="rgba(0,0,0,0.2)"
+                                        className="pointer-events-none"
+                                    />
                                     <circle
                                         cx={pos.x}
                                         cy={pos.y}
@@ -746,15 +811,14 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         fill={CITY_COLORS[city]}
                                         strokeWidth={6}
                                         className="transition-all duration-200 group-hover:stroke-[10px]"
-                                        filter="url(#token-shadow)"
                                     />
                                     <text
                                         x={pos.x}
                                         y={pos.y - CITY_RADIUS - 16}
                                         textAnchor="middle"
                                         fill={CITY_COLORS[city]}
+                                        style={{ textShadow: "1px 2px 3px rgba(0,0,0,0.8)" }}
                                         className="text-[24px] group-hover:text-[26px] font-bold uppercase pointer-events-none transition-all duration-200 tracking-widest"
-                                        filter="url(#text-shadow)"
                                     >
                                         {City[city]}
                                     </text>
@@ -781,6 +845,16 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                     className="cursor-pointer group"
                                     style={{ transition: 'opacity 0.2s' }}
                                 >
+                                    {/* Tactile 3D Depth Shadow under Space Tile */}
+                                    <rect
+                                        x={1}
+                                        y={2}
+                                        width={width}
+                                        height={height}
+                                        fill="rgba(0,0,0,0.25)"
+                                        rx={5}
+                                        className="pointer-events-none"
+                                    />
                                     <rect
                                         width={width}
                                         height={height}
@@ -789,7 +863,6 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         strokeWidth={1}
                                         rx={4}
                                         className="transition-all duration-200 hover:filter-brightness-110 group-hover:stroke-[#fbbf24] group-hover:stroke-[3px]"
-                                        filter="url(#token-shadow)"
                                     />
                                     {/* Overlay Gradient for depth */}
                                     <rect
@@ -807,10 +880,10 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         dominantBaseline="middle"
                                         fill="#f1f1f5ff"
                                         style={{
-                                            fontSize: isCorner ? '24px' : '22px',
+                                            fontSize: isCorner ? '22px' : '23px',
+                                            textShadow: '0 2px 3px rgba(0,0,0,0.85)'
                                         }}
                                         className="pointer-events-none tracking-wider"
-                                        filter="url(#text-shadow)"
                                     >
                                         {label}
                                     </text>
@@ -838,9 +911,11 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                             textAnchor="middle"
                                             dominantBaseline="middle"
                                             fill="#ffcc00ff"
-                                            style={{ fontSize: '24px' }}
+                                            style={{
+                                                fontSize: '24px',
+                                                textShadow: '0 1px 3px rgba(0,0,0,0.85)'
+                                            }}
                                             className="pointer-events-none"
-                                            filter="url(#text-shadow)"
                                         >
                                             ${space.cost / 1000}k
                                         </text>
@@ -859,7 +934,14 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                 const offset = getPlayerOffset(index, group.length);
                                 const color = getPlayerColor(pId);
 
-                                return (
+                                return isReplay ? (
+                                    <ReplayPlayerToken
+                                        key={pId}
+                                        color={color}
+                                        boardPosition={pState.boardPosition}
+                                        offset={offset}
+                                    />
+                                ) : (
                                     <PlayerToken
                                         key={pId}
                                         playerId={pId}
@@ -868,6 +950,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                         offset={offset}
                                         addSound={addSound}
                                         getSoundDuration={getSoundDuration}
+                                        isReplay={false}
                                     />
                                 );
                             })}
@@ -882,7 +965,7 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
                         {/* Backdrop */}
                         <div
-                            className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity"
+                            className="absolute inset-0 bg-black/80 pointer-events-auto transition-opacity"
                             onClick={() => setSelectedCity(null)}
                         />
 
@@ -912,10 +995,11 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                                 animate={{ opacity: 1, scale: 1, x: "-50%", y: "-100%" }}
                                 exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-90%" }}
                                 transition={{ duration: 0.3 }}
-                                className="fixed z-[10000] pointer-events-none px-4 py-2 bg-zinc-900/90 text-white rounded-lg shadow-xl border border-zinc-700 backdrop-blur-sm max-w-xs text-center font-cute"
+                                className="fixed z-[10000] pointer-events-none px-4 py-2 bg-zinc-900/95 text-white rounded-lg shadow-xl border border-zinc-700 max-w-xs text-center font-cute"
                                 style={{
                                     left: hoveredSpace.x,
                                     top: hoveredSpace.y - 10,
+                                    willChange: "transform, opacity"
                                 }}
                             >
                                 <p className="text-md font-medium">
@@ -932,10 +1016,11 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
             }
             {/* Dice Animation Overlay */}
             {
-                gameState && (
+                !isReplay && gameState && (
                     <DiceRollAnimation
                         dice1={gameState.dice1}
                         dice2={gameState.dice2}
+                        currentPlayerId={gameState.currentPlayerId}
                         isClientRolling={isClientRolling}
                         onRollResolved={onRollResolved}
                     />
@@ -943,4 +1028,6 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
             }
         </main >
     );
-}
+});
+
+export default GameBoard;

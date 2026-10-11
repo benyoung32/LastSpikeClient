@@ -33,7 +33,7 @@ export default function ActionBar({ validActions, onActionSelect, isVisible = tr
 
     if (effectiveMessage && visibleActions.length === 0) {
         return (
-            <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 border border-zinc-700/50 rounded-full px-8 py-4 shadow-2xl backdrop-blur-sm animate-pulse">
+            <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/95 border border-zinc-700/50 rounded-full px-8 py-4 shadow-2xl animate-pulse">
                 <span className="text-zinc-400 font-medium tracking-wide text-lg flex items-center gap-3">
                     {effectiveMessage}
                 </span>
@@ -42,7 +42,7 @@ export default function ActionBar({ validActions, onActionSelect, isVisible = tr
     }
 
     return (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 border border-zinc-700 rounded-full px-10 py-5 flex gap-6 shadow-2xl backdrop-blur-sm">
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/95 border border-zinc-700 rounded-full px-10 py-5 flex gap-6 shadow-2xl">
             {visibleActions.map((action) => (
                 <button
                     key={action}

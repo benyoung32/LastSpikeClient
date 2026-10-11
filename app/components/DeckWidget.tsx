@@ -76,7 +76,7 @@ export const DeckWidget: React.FC<DeckWidgetProps> = ({ properties, className = 
                 </div>
 
                 {/* Badge Overlay */}
-                <div className="absolute -top-3 -right-3 w-8 h-8 bg-amber-700/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg border-2 border-[#e6dcc0] z-20 group-hover:-translate-y-1 transition-transform duration-200 pointer-events-none">
+                <div className="absolute -top-3 -right-3 w-8 h-8 bg-amber-800 rounded-full flex items-center justify-center shadow-lg border-2 border-[#e6dcc0] z-20 group-hover:-translate-y-1 transition-transform duration-200 pointer-events-none">
                     <span className="text-[#e6dcc0] font-bold text-sm">{properties.length}</span>
                 </div>
             </div>

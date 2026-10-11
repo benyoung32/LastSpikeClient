@@ -13,7 +13,7 @@ export const GameRulesWidget: React.FC<GameRulesWidgetProps> = ({ className = ""
     return (
         <AnimatedModalWidget
             className={className}
-            triggerClassName="w-16 h-16 rounded-full bg-amber-700/80 hover:bg-amber-600/90 border-2 border-[#e6dcc0] shadow-lg flex items-center justify-center backdrop-blur group hover:scale-110"
+            triggerClassName="w-16 h-16 rounded-full bg-amber-700 hover:bg-amber-600 border-2 border-[#e6dcc0] shadow-lg flex items-center justify-center group hover:scale-110"
             baseModalClassName="bg-[#f4ebd0] border-4 border-[#5c4d3c] rounded-xl shadow-2xl"
             animatingModalClassName="bg-[#e6dcc0] border-2 border-[#5c4d3c] rounded-lg shadow-none"
             modalClassName="w-full max-w-4xl max-h-[90vh] sm:max-h-[85vh] text-[#3e3223] font-cute"

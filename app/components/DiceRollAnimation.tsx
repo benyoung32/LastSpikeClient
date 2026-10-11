@@ -7,6 +7,7 @@ import { useGameSounds } from "@/app/hooks/useGameSounds";
 interface DiceRollAnimationProps {
     dice1: number;
     dice2: number;
+    currentPlayerId?: string;
     isClientRolling?: boolean;
     onRollResolved?: () => void;
 }
@@ -31,14 +32,14 @@ const Die = ({ value }: { value: number }) => {
     const activePips = PIPS[value] || [];
 
     return (
-        <div className="w-12 h-12 bg-white rounded-lg shadow-[inset_0_0_10px_rgba(0,0,0,0.1),0_4px_8px_rgba(0,0,0,0.2)] border border-gray-200 flex flex-wrap p-1.5 justify-between content-between relative">
+        <div className="w-16 h-16 bg-white rounded-xl shadow-[inset_0_0_12px_rgba(0,0,0,0.1),0_6px_12px_rgba(0,0,0,0.25)] border border-gray-200 flex flex-wrap p-2 justify-between content-between relative">
             {/* Gradient Overlay for shine */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-black/10 rounded-lg pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-black/10 rounded-xl pointer-events-none" />
 
             {Array.from({ length: 9 }).map((_, i) => (
                 <div key={i} className="w-1/3 h-1/3 flex items-center justify-center">
                     {activePips.includes(i) && (
-                        <div className="w-2 h-2 bg-black rounded-full shadow-sm" />
+                        <div className="w-2.5 h-2.5 bg-black rounded-full shadow-sm" />
                     )}
                 </div>
             ))}
@@ -46,11 +47,18 @@ const Die = ({ value }: { value: number }) => {
     );
 };
 
-const MIN_ROLL_DURATION = 600; // ms minimum rolling duration before reveal
+const MIN_ROLL_DURATION = 2000; // ms minimum rolling duration before reveal
 
-export const DiceRollAnimation = ({ dice1, dice2, isClientRolling = false, onRollResolved }: DiceRollAnimationProps) => {
+export const DiceRollAnimation = ({
+    dice1,
+    dice2,
+    currentPlayerId,
+    isClientRolling = false,
+    onRollResolved
+}: DiceRollAnimationProps) => {
     const controls1 = useAnimation();
     const controls2 = useAnimation();
+    const containerRef = useRef<HTMLDivElement>(null);
     const { addSound } = useGameSounds();
     const [displayVal1, setDisplayVal1] = useState(1);
     const [displayVal2, setDisplayVal2] = useState(1);
@@ -70,7 +78,7 @@ export const DiceRollAnimation = ({ dice1, dice2, isClientRolling = false, onRol
         const interval = setInterval(() => {
             setDisplayVal1(Math.floor(Math.random() * 6) + 1);
             setDisplayVal2(Math.floor(Math.random() * 6) + 1);
-        }, 80);
+        }, 70);
 
         return () => clearInterval(interval);
     }, [isRolling]);
@@ -112,30 +120,51 @@ export const DiceRollAnimation = ({ dice1, dice2, isClientRolling = false, onRol
 
             addSound('dice');
 
-            const x1 = (Math.random() - 0.5) * 300;
-            const y1 = (Math.random() - 0.5) * 300;
-            const dice2Angle = Math.random() * 2 * Math.PI;
-            const x2 = x1 + 100 * Math.sin(dice2Angle);
-            const y2 = y1 + 100 * Math.cos(dice2Angle);
+            // Calculate starting position based on current player's info card
+            let startX = 400;
+            let startY = 0;
 
-            controls1.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
-            controls2.set({ x: 400, y: (Math.random() - 0.5) * 300, rotate: Math.random() * 360, scale: 1, opacity: 0 });
+            if (containerRef.current && currentPlayerId) {
+                const cardEl = document.getElementById(`player-panel-${currentPlayerId}`);
+                if (cardEl) {
+                    const containerRect = containerRef.current.getBoundingClientRect();
+                    const cardRect = cardEl.getBoundingClientRect();
+
+                    const containerCenterX = containerRect.left + containerRect.width / 2;
+                    const containerCenterY = containerRect.top + containerRect.height / 2;
+
+                    const cardCenterX = cardRect.left + cardRect.width / 2;
+                    const cardCenterY = cardRect.top + cardRect.height / 2;
+
+                    startX = cardCenterX - containerCenterX;
+                    startY = cardCenterY - containerCenterY;
+                }
+            }
+
+            const x1 = (Math.random() - 0.5) * 160;
+            const y1 = (Math.random() - 0.5) * 160;
+            const dice2Angle = Math.random() * 2 * Math.PI;
+            const x2 = x1 + 90 * Math.sin(dice2Angle);
+            const y2 = y1 + 90 * Math.cos(dice2Angle);
+
+            controls1.set({ x: startX - 32, y: startY, rotate: Math.random() * 360, scale: 0.5, opacity: 0 });
+            controls2.set({ x: startX + 32, y: startY, rotate: Math.random() * 360, scale: 0.5, opacity: 0 });
 
             controls1.start({
                 x: x1,
                 y: y1,
-                rotate: Math.random() * 720 + 360,
+                rotate: Math.random() * 1080 + 720,
                 scale: 1,
                 opacity: 1,
-                transition: { duration: 0.35, type: "spring", damping: 15, stiffness: 40 }
+                transition: { duration: 2.0, ease: [0.25, 0.8, 0.35, 1] }
             });
             controls2.start({
                 x: x2,
                 y: y2,
-                rotate: Math.random() * 720 + 360,
+                rotate: Math.random() * 1080 + 720,
                 scale: 1,
                 opacity: 1,
-                transition: { duration: 0.5, type: "spring", damping: 15, stiffness: 40 }
+                transition: { duration: 2.2, ease: [0.25, 0.8, 0.35, 1] }
             });
         }
 
@@ -159,17 +188,17 @@ export const DiceRollAnimation = ({ dice1, dice2, isClientRolling = false, onRol
 
                 // Shake / Bounce
                 await Promise.all([
-                    controls1.start({ scale: [1, 1.1, 1], transition: { duration: 0.2 } }),
-                    controls2.start({ scale: [1, 1.1, 1], transition: { duration: 0.2 } })
+                    controls1.start({ scale: [1, 1.2, 1], transition: { duration: 0.25 } }),
+                    controls2.start({ scale: [1, 1.2, 1], transition: { duration: 0.25 } })
                 ]);
 
                 // Fade Out
                 fadeTimerRef.current = setTimeout(async () => {
                     await Promise.all([
-                        controls1.start({ opacity: 0, scale: 0.9, transition: { duration: 0.5 } }),
-                        controls2.start({ opacity: 0, scale: 0.9, transition: { duration: 0.5 } })
+                        controls1.start({ opacity: 0, scale: 0.8, transition: { duration: 0.5 } }),
+                        controls2.start({ opacity: 0, scale: 0.8, transition: { duration: 0.5 } })
                     ]);
-                }, 1000);
+                }, 1200);
             }, remaining);
         }
 
@@ -177,14 +206,14 @@ export const DiceRollAnimation = ({ dice1, dice2, isClientRolling = false, onRol
             if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
             if (resolveTimerRef.current) clearTimeout(resolveTimerRef.current);
         };
-    }, [dice1, dice2, isClientRolling, controls1, controls2, addSound, onRollResolved]);
+    }, [dice1, dice2, currentPlayerId, isClientRolling, controls1, controls2, addSound, onRollResolved]);
 
     return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 overflow-hidden">
-            <motion.div animate={controls1} className="absolute" initial={{ opacity: 0 }}>
+        <div ref={containerRef} className="fixed inset-0 flex items-center justify-center pointer-events-none z-50 overflow-hidden" style={{ willChange: "transform" }}>
+            <motion.div animate={controls1} className="absolute" initial={{ opacity: 0 }} style={{ willChange: "transform, opacity" }}>
                 <Die value={displayVal1} />
             </motion.div>
-            <motion.div animate={controls2} className="absolute" initial={{ opacity: 0 }}>
+            <motion.div animate={controls2} className="absolute" initial={{ opacity: 0 }} style={{ willChange: "transform, opacity" }}>
                 <Die value={displayVal2} />
             </motion.div>
         </div>

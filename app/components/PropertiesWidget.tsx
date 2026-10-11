@@ -139,13 +139,6 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({
                                     </div>
                                 );
                             })}
-
-
-                            {properties.length === 0 && (
-                                <div className="text-slate-500 font-cute text-sm mb-4 opacity-50">
-                                    No properties
-                                </div>
-                            )}
                         </div>
                     </>
                 )

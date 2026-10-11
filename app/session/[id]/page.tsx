@@ -16,6 +16,7 @@ import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { DeckWidget } from "@/app/components/DeckWidget";
 import { GameRulesWidget } from "@/app/components/GameRulesWidget";
 import { PropertyPurchasePopup } from "@/app/components/PropertyPurchasePopup";
+import ResultsScreen from "@/app/components/ResultsScreen";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -45,9 +46,39 @@ export default function SessionPage() {
     const [isProcessingAction, setIsProcessingAction] = useState(false);
     const [gameOverAnimationPlaying, setGameOverAnimationPlaying] = useState(false);
     const [gameOverScreenVisible, setGameOverScreenVisible] = useState(false);
+    const [isResultsScreenOpen, setIsResultsScreenOpen] = useState(false);
+    const [serverUpdateCount, setServerUpdateCount] = useState(0);
     const [isClientRolling, setIsClientRolling] = useState(false);
     const rollStartTimeRef = useRef<number | null>(null);
     const { addSound } = useGameSounds();
+
+    const handleCloseResultsScreen = useCallback(() => {
+        setIsResultsScreenOpen(false);
+    }, []);
+
+    const handleReturnHome = useCallback(() => {
+        router.push("/");
+    }, [router]);
+
+    // Toggle ResultsScreen with 'R' key or close with 'Escape'
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeElement = document.activeElement as HTMLElement | null;
+            const tagName = (activeElement?.tagName || "").toLowerCase();
+            if (tagName === "input" || tagName === "textarea" || activeElement?.isContentEditable) {
+                return;
+            }
+
+            if (e.key === "r" || e.key === "R") {
+                setIsResultsScreenOpen(prev => !prev);
+            } else if (e.key === "Escape") {
+                setIsResultsScreenOpen(false);
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
     const sessionRef = useRef(session);
@@ -164,7 +195,7 @@ export default function SessionPage() {
 
                 const startTime = rollStartTimeRef.current || Date.now();
                 const elapsed = Date.now() - startTime;
-                const waitDuration = Math.max(200, 800 - elapsed);
+                const waitDuration = Math.max(200, 2200 - elapsed);
 
                 await new Promise(resolve => setTimeout(resolve, waitDuration));
                 setIsClientRolling(false);
@@ -365,6 +396,7 @@ export default function SessionPage() {
 
         const onGameBoardUpdated = () => {
             fetchGameState();
+            setServerUpdateCount(prev => prev + 1);
             console.log("GameBoardUpdated event received");
         }
 
@@ -452,11 +484,23 @@ export default function SessionPage() {
     // Show Game Over Screen ONLY if visible (after animation)
     if (gameOverScreenVisible) {
         return (
-            <GameOverScreen
-                players={players}
-                playerStates={gameState.players}
-                onReturnHome={() => router.push("/")}
-            />
+            <>
+                <GameOverScreen
+                    players={players}
+                    playerStates={gameState.players}
+                    onReturnHome={() => router.push("/")}
+                    onViewResults={() => setIsResultsScreenOpen(true)}
+                />
+                <ResultsScreen
+                    boardId={session.boardId}
+                    players={players}
+                    gameState={gameState}
+                    isOpen={isResultsScreenOpen}
+                    onClose={handleCloseResultsScreen}
+                    onReturnHome={handleReturnHome}
+                    serverUpdateCount={serverUpdateCount}
+                />
+            </>
         );
     }
 
@@ -604,19 +648,40 @@ export default function SessionPage() {
                         }
                     }}
                 />
+
+                <ResultsScreen
+                    boardId={session.boardId}
+                    players={players}
+                    gameState={gameState}
+                    isOpen={isResultsScreenOpen}
+                    onClose={handleCloseResultsScreen}
+                    onReturnHome={handleReturnHome}
+                    serverUpdateCount={serverUpdateCount}
+                />
             </>
         );
     }
 
     // Check for game over state and render the screen if true
     return (
-        <LobbyView
-            sessionId={sessionId}
-            players={players}
-            currentPlayerId={clientPlayerId}
-            isHost={isHost}
-            isStarting={isStarting}
-            onStartGame={handleStartGame}
-        />
+        <>
+            <LobbyView
+                sessionId={sessionId}
+                players={players}
+                currentPlayerId={clientPlayerId}
+                isHost={isHost}
+                isStarting={isStarting}
+                onStartGame={handleStartGame}
+            />
+            <ResultsScreen
+                boardId={session.boardId}
+                players={players}
+                gameState={gameState}
+                isOpen={isResultsScreenOpen}
+                onClose={handleCloseResultsScreen}
+                onReturnHome={handleReturnHome}
+                serverUpdateCount={serverUpdateCount}
+            />
+        </>
     );
 }

@@ -1,4 +1,4 @@
-import { Player, SessionData, GameState, ActionType, Route, CityPair, Trade } from "@/types";
+import { Player, SessionData, GameState, ActionType, CityPair, Trade, GameHistoryTurnDiff } from "@/types";
 import axios, { AxiosResponse } from "axios";
 
 const getBaseUrl = () => {
@@ -103,5 +103,25 @@ export async function respondToTrade(boardId: string, playerId: string, accept: 
             playerId,
             accept
         })
+    );
+}
+
+export async function getGameHistory(
+    boardId: string,
+    startTurn?: number,
+    endTurn?: number
+): Promise<GameHistoryTurnDiff[]> {
+    const params: Record<string, number> = {};
+    if (typeof startTurn === "number" && !isNaN(startTurn)) {
+        params.start = startTurn;
+        params.startTurn = startTurn;
+    }
+    if (typeof endTurn === "number" && !isNaN(endTurn)) {
+        params.end = endTurn;
+        params.endTurn = endTurn;
+    }
+
+    return handleResponse<GameHistoryTurnDiff[]>(
+        axios.get(`${API_BASE_URL}/api/GameBoards/${boardId}/game-history`, { params })
     );
 }
