@@ -26,7 +26,7 @@ export const GameRulesWidget: React.FC<GameRulesWidgetProps> = ({ className = ""
                 </div>
             }
             modalContent={(closeModal) => (
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col h-full min-h-0">
 
                     {/* Header */}
                     <div className="p-6 border-b-2 border-[#5c4d3c]/20 bg-[#e6dcc0] flex justify-between items-center shrink-0">
@@ -43,7 +43,7 @@ export const GameRulesWidget: React.FC<GameRulesWidgetProps> = ({ className = ""
                     </div>
 
                     {/* Scrolling Body */}
-                    <div className="p-6 sm:p-10 overflow-y-auto flex-1 space-y-6 text-lg leading-relaxed">
+                    <div className="p-6 sm:p-10 overflow-y-auto flex-1 min-h-0 space-y-6 text-lg leading-relaxed [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                         <section>
                             <h3 className={SECTION_HEADER_CLASS}>GOAL</h3>
                             <p>

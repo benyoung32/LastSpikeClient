@@ -18,6 +18,8 @@ interface GameBoardProps {
     onRouteSelect: (route: Route) => void;
     validRoutes: Route[];
     highlightWinningPath?: boolean;
+    isClientRolling?: boolean;
+    onRollResolved?: () => void;
 }
 
 // Layout Constants for Internal SVG Coordinate System (1600x900)
@@ -331,7 +333,7 @@ const PlayerToken = memo(({ playerId, color, boardPosition, offset, addSound, ge
 });
 
 
-export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes, highlightWinningPath = false }: GameBoardProps) {
+export default function GameBoard({ session, players, currentPlayerId, gameState, onRouteSelect, validRoutes, highlightWinningPath = false, isClientRolling = false, onRollResolved }: GameBoardProps) {
     const [selectedCity, setSelectedCity] = useState<City | null>(null);
     const [hoveredSpace, setHoveredSpace] = useState<{ type: SpaceType; cost: number; x: number; y: number } | null>(null);
     const [winningPath, setWinningPath] = useState<Route[]>([]);
@@ -934,6 +936,8 @@ export default function GameBoard({ session, players, currentPlayerId, gameState
                     <DiceRollAnimation
                         dice1={gameState.dice1}
                         dice2={gameState.dice2}
+                        isClientRolling={isClientRolling}
+                        onRollResolved={onRollResolved}
                     />
                 )
             }

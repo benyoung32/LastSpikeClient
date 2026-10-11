@@ -36,7 +36,7 @@ export const DeckWidget: React.FC<DeckWidgetProps> = ({ properties, className = 
             emptyMessage="The deck is empty!"
         >
             {/* Deck Trigger (Face Down Stack) */}
-            <div className={`relative w-32 h-44 cursor-pointer group`}>
+            <div id="deck-widget" className={`relative w-32 h-44 cursor-pointer group`}>
                 {/* Stack Effects (Cards underneath) */}
                 <div className="absolute top-0 left-0 w-full h-full bg-[#c7b299] rounded-lg transform translate-x-2 translate-y-2 border border-[#8c7b6c]" />
                 <div className="absolute top-0 left-0 w-full h-full bg-[#d6c0a5] rounded-lg transform translate-x-1 translate-y-1 border border-[#8c7b6c]" />

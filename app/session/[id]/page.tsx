@@ -15,6 +15,7 @@ import TradeWindow from "@/app/components/TradeWindow";
 import { useGameSounds } from "@/app/hooks/useGameSounds";
 import { DeckWidget } from "@/app/components/DeckWidget";
 import { GameRulesWidget } from "@/app/components/GameRulesWidget";
+import { PropertyPurchasePopup } from "@/app/components/PropertyPurchasePopup";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -44,6 +45,8 @@ export default function SessionPage() {
     const [isProcessingAction, setIsProcessingAction] = useState(false);
     const [gameOverAnimationPlaying, setGameOverAnimationPlaying] = useState(false);
     const [gameOverScreenVisible, setGameOverScreenVisible] = useState(false);
+    const [isClientRolling, setIsClientRolling] = useState(false);
+    const rollStartTimeRef = useRef<number | null>(null);
     const { addSound } = useGameSounds();
 
     // Use a ref to access the latest session in callbacks/effects without triggering re-runs
@@ -149,15 +152,23 @@ export default function SessionPage() {
             const currentDice1 = currentGameState?.dice1 || 0;
             const currentDice2 = currentGameState?.dice2 || 0;
 
-            if (data.dice1 !== 0 && (data.dice1 !== currentDice1 || data.dice2 !== currentDice2)) {
+            const isNewRoll = data.dice1 !== 0 && (data.dice1 !== currentDice1 || data.dice2 !== currentDice2);
+
+            if (isNewRoll || rollStartTimeRef.current !== null) {
                 // Update only dice first
                 setGameState(prev => ({
                     ...prev,
                     dice1: data.dice1,
                     dice2: data.dice2
                 }));
-                // Wait for animation
-                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                const startTime = rollStartTimeRef.current || Date.now();
+                const elapsed = Date.now() - startTime;
+                const waitDuration = Math.max(200, 800 - elapsed);
+
+                await new Promise(resolve => setTimeout(resolve, waitDuration));
+                setIsClientRolling(false);
+                rollStartTimeRef.current = null;
             }
 
             // Check for position changes
@@ -463,6 +474,7 @@ export default function SessionPage() {
                     })}
                     validRoutes={selectableRoutes}
                     highlightWinningPath={gameOverAnimationPlaying}
+                    isClientRolling={isClientRolling}
                 />
 
                 {(() => {
@@ -509,6 +521,11 @@ export default function SessionPage() {
                     <DeckWidget properties={unownedProperties} />
                 </div>
 
+                <PropertyPurchasePopup
+                    gameState={gameState}
+                    players={players}
+                />
+
                 <div className={`absolute z-50 transition-all duration-500 ${players.length >= 4 ? 'left-6 top-32 sm:left-8 sm:top-36' : 'left-6 top-6 sm:left-8 sm:top-8'}`}>
                     <GameRulesWidget />
                 </div>
@@ -527,6 +544,11 @@ export default function SessionPage() {
                             return;
                         }
 
+                        if (Number(action) === ActionType.Roll) {
+                            setIsClientRolling(true);
+                            rollStartTimeRef.current = Date.now();
+                        }
+
                         setValidActions([]);
                         setIsProcessingAction(true);
                         try {
@@ -539,6 +561,8 @@ export default function SessionPage() {
                             }
                         } catch (err) {
                             console.error("Error processing action:", err);
+                            setIsClientRolling(false);
+                            rollStartTimeRef.current = null;
                         } finally {
                             setIsProcessingAction(false);
                         }

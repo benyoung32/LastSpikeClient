@@ -151,7 +151,7 @@ export const PropertiesWidget: React.FC<PropertiesWidgetProps> = ({
                 )
             }
             modalContent={
-                <div className="flex flex-wrap gap-12 justify-center pb-10 pt-4 p-8">
+                <div className="flex flex-wrap gap-12 justify-center pb-10 pt-4 p-8 overflow-y-auto flex-1 min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     {Object.entries(groupedProperties).map(([cityStr, props]) => {
                         const city = parseInt(cityStr) as City;
                         const stackHeight = 288 + (Math.max(0, props.length - 1) * 20); // 288px (h-72) + offsets

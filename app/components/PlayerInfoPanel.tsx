@@ -73,6 +73,7 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
 }) => {
     return (
         <div
+            id={`player-panel-${player.id}`}
             className={`absolute flex flex-row items-center gap-2 px-5 py-2 bg-slate-900/90 backdrop-blur-md rounded-full border shadow-xl transition-all duration-300 ${screenPosition}`}
             style={{
                 borderColor: color,
@@ -83,12 +84,11 @@ export const PlayerInfoPanel: React.FC<PlayerInfoPanelProps> = ({
             {/* Left: Player Name */}
             <div className="flex flex-col overflow-hidden min-w-[100px] max-w-[140px]">
                 <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
-                    {isClient ? 'You' : 'Opponent'}
+                    {isClient ? 'You' : ''}
                 </span>
                 <span
                     className="font-bold text-lg truncate"
                     style={{ color: color }}
-                    title={player.name}
                 >
                     {player.name}
                 </span>
