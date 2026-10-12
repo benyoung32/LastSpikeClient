@@ -1,18 +1,36 @@
 import React from 'react';
 import { Player, PlayerState } from '@/types';
-
+import { isDevMode } from '@/lib/devMode';
 
 interface GameOverScreenProps {
-    players: Player[];
-    playerStates: Record<string, PlayerState>;
+    players?: Player[];
+    playerStates?: Record<string, PlayerState>;
     onReturnHome: () => void;
     onViewResults?: () => void;
 }
 
-const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, onReturnHome, onViewResults }) => {
+const DEFAULT_DEV_PLAYERS: Player[] = [
+    { id: 'player-1', name: 'Alice' },
+    { id: 'player-2', name: 'Bob' },
+];
+
+const DEFAULT_DEV_STATES: Record<string, PlayerState> = {
+    'player-1': { money: 85000, boardPosition: 0, skipNextTurn: false },
+    'player-2': { money: 62000, boardPosition: 0, skipNextTurn: false },
+};
+
+const GameOverScreen: React.FC<GameOverScreenProps> = ({
+    players = DEFAULT_DEV_PLAYERS,
+    playerStates = DEFAULT_DEV_STATES,
+    onReturnHome,
+    onViewResults
+}) => {
+    const effectivePlayers = (players && players.length > 0) ? players : DEFAULT_DEV_PLAYERS;
+    const effectiveStates = (playerStates && Object.keys(playerStates).length > 0) ? playerStates : DEFAULT_DEV_STATES;
+
     // 1. Combine player info with their state (money)
-    const rankedPlayers = players.map(player => {
-        const state = playerStates[player.id];
+    const rankedPlayers = effectivePlayers.map(player => {
+        const state = effectiveStates ? effectiveStates[player.id] : undefined;
         return {
             ...player,
             money: state ? state.money : 0,
@@ -81,6 +99,12 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ players, playerStates, 
                     Home
                 </button>
             </div>
+
+            {isDevMode() && (
+                <p className="mt-8 text-xs text-zinc-500 font-mono tracking-wide">
+                    Dev Mode &bull; Press &apos;g&apos; to toggle Game Over screen
+                </p>
+            )}
         </div>
     );
 };

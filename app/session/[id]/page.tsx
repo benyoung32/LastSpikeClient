@@ -17,6 +17,7 @@ import { DeckWidget } from "@/app/components/DeckWidget";
 import { GameRulesWidget } from "@/app/components/GameRulesWidget";
 import { PropertyPurchasePopup } from "@/app/components/PropertyPurchasePopup";
 import ResultsScreen from "@/app/components/ResultsScreen";
+import { isDevMode } from "@/lib/devMode";
 
 const INFO_PANEL_POSITIONS = [
     "bottom-4 left-[15vw] -translate-x-1/2", // Slot 0: User (Bottom Left)
@@ -60,7 +61,12 @@ export default function SessionPage() {
         router.push("/");
     }, [router]);
 
-    // Toggle ResultsScreen with 'R' key or close with 'Escape'
+    const isResultsScreenOpenRef = useRef(isResultsScreenOpen);
+    useEffect(() => {
+        isResultsScreenOpenRef.current = isResultsScreenOpen;
+    }, [isResultsScreenOpen]);
+
+    // Toggle ResultsScreen with 'R', GameOverScreen with 'G' in dev mode, or close with 'Escape'
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const activeElement = document.activeElement as HTMLElement | null;
@@ -72,7 +78,18 @@ export default function SessionPage() {
             if (e.key === "r" || e.key === "R") {
                 setIsResultsScreenOpen(prev => !prev);
             } else if (e.key === "Escape") {
-                setIsResultsScreenOpen(false);
+                if (isResultsScreenOpenRef.current) {
+                    setIsResultsScreenOpen(false);
+                } else if (isDevMode() && !gameStateRef.current?.isGameOver) {
+                    setGameOverScreenVisible(false);
+                }
+            } else if (isDevMode() && (e.key === "g" || e.key === "G")) {
+                setGameOverScreenVisible(prev => {
+                    if (prev) {
+                        setIsResultsScreenOpen(false);
+                    }
+                    return !prev;
+                });
             }
         };
 

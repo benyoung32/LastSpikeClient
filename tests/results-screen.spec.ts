@@ -311,4 +311,123 @@ test.describe('Results Screen & Game History', () => {
         await expect(page.locator('#results-screen-backdrop')).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible();
     });
+
+    test('Pressing g key in dev mode activates GameOverScreen, exposes Results button, and toggles closed', async ({ page }) => {
+        const mockBoardId = 'dev-test-board-id';
+        const mockPlayer1Id = 'player-1-id';
+        const mockPlayer2Id = 'player-2-id';
+
+        await page.route(`**/api/Sessions/dev-session-test`, async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    id: 'dev-session-test',
+                    description: 'Dev Session',
+                    boardId: mockBoardId,
+                    startTime: '2026-10-11T12:00:00Z',
+                    endTime: null,
+                    playerIds: [mockPlayer1Id, mockPlayer2Id]
+                })
+            });
+        });
+
+        await page.route(`**/api/Sessions/dev-session-test/players`, async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify([
+                    { id: mockPlayer1Id, name: 'Alice' },
+                    { id: mockPlayer2Id, name: 'Bob' }
+                ])
+            });
+        });
+
+        await page.route(`**/api/Players/*`, async (route) => {
+            const url = route.request().url();
+            const pId = url.split('/').pop();
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ id: pId, name: pId === mockPlayer1Id ? 'Alice' : 'Bob' })
+            });
+        });
+
+        await page.route(`**/api/GameBoards/${mockBoardId}/gamestate`, async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    players: {
+                        [mockPlayer1Id]: { money: 95000, boardPosition: 3, skipNextTurn: false },
+                        [mockPlayer2Id]: { money: 65000, boardPosition: 7, skipNextTurn: false }
+                    },
+                    routes: [],
+                    properties: [],
+                    isGameOver: false,
+                    currentPlayerId: mockPlayer1Id,
+                    turnPhase: 0,
+                    validActions: [6],
+                    dice1: 2,
+                    dice2: 3,
+                    pendingTrade: null
+                })
+            });
+        });
+
+        await page.route(`**/api/GameBoards/${mockBoardId}/game-history*`, async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify([
+                    { turn: 1, dice1: 2, dice2: 3 }
+                ])
+            });
+        });
+
+        await page.addInitScript(({ sId, pId }) => {
+            sessionStorage.setItem(`ls_pid_${sId}`, pId);
+        }, { sId: 'dev-session-test', pId: mockPlayer1Id });
+
+        await page.goto('/session/dev-session-test');
+
+        // Initially game board is visible and GameOverScreen is NOT visible
+        const gameOverTitle = page.locator('h1:has-text("GAME OVER")');
+        await expect(gameOverTitle).not.toBeVisible();
+
+        // 1. Press 'g' key in dev mode to activate GameOverScreen
+        await page.keyboard.press('g');
+        await expect(gameOverTitle).toBeVisible();
+
+        // Verify Results button is displayed on GameOverScreen
+        const viewResultsBtn = page.locator('#game-over-view-results-button');
+        await expect(viewResultsBtn).toBeVisible();
+
+        // 2. Click Results button to open ResultsScreen
+        await viewResultsBtn.click();
+        await expect(page.locator('#results-screen-backdrop')).toBeVisible();
+
+        // 3. Close ResultsScreen
+        await page.click('#results-close-button');
+        await expect(page.locator('#results-screen-backdrop')).not.toBeVisible();
+        await expect(gameOverTitle).toBeVisible();
+
+        // 4. Press 'g' again to toggle GameOverScreen off
+        await page.keyboard.press('g');
+        await expect(gameOverTitle).not.toBeVisible();
+
+        // 5. Test activating GameOverScreen from home page with 'g' key as well
+        await page.goto('/');
+        await expect(gameOverTitle).not.toBeVisible();
+
+        // Ensure text input is blurred
+        await page.locator('input#name').blur();
+        await page.keyboard.press('g');
+        await expect(gameOverTitle).toBeVisible();
+        await expect(page.locator('#game-over-view-results-button')).toBeVisible();
+
+        // Toggle back off with 'g'
+        await page.keyboard.press('g');
+        await expect(gameOverTitle).not.toBeVisible();
+    });
 });

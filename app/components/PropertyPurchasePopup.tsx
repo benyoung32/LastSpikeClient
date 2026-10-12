@@ -5,6 +5,10 @@ import { GameState, Player, Property } from '@/types';
 import { AnimatedModalWidget } from './AnimatedModalWidget';
 import { PropertyCard } from './PropertyCard';
 
+// Property card dimensions: w-48 (12rem = 192px) by h-72 (18rem = 288px)
+const CARD_WIDTH = 192;
+const CARD_HEIGHT = 288;
+
 interface PropertyPurchasePopupProps {
     gameState: GameState;
     players: Player[];
@@ -34,8 +38,18 @@ export const PropertyPurchasePopup: React.FC<PropertyPurchasePopupProps> = ({ ga
         const playerElem = document.getElementById(`player-panel-${prop.owner_PID}`);
         const measuredPlayerRect = playerElem ? playerElem.getBoundingClientRect() : null;
 
+        // End rect has the same shape as the property card element centered at the player element position
+        const targetEndRect = measuredPlayerRect
+            ? new DOMRect(
+                measuredPlayerRect.left + (measuredPlayerRect.width - CARD_WIDTH) / 2,
+                measuredPlayerRect.top + (measuredPlayerRect.height - CARD_HEIGHT) / 2,
+                CARD_WIDTH / 4,
+                CARD_HEIGHT / 4
+            )
+            : fallbackStartRect;
+
         setStartRect(fallbackStartRect);
-        setEndRect(measuredPlayerRect || fallbackStartRect);
+        setEndRect(targetEndRect);
         setActiveProperty(prop);
         setIsOpen(true);
     }, []);

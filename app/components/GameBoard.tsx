@@ -598,9 +598,8 @@ const GameBoard = memo(function GameBoard({
                         width={MAP_WIDTH + 140}
                         height={MAP_HEIGHT}
                         rx="30"
-                        fill="#e6dccd"
-                        opacity="0.6"
-                        stroke="#c9bcab"
+                        fill="#E4D8C8"
+                        stroke="#E4D8C8"
                         strokeWidth="1"
                     />
 
@@ -817,7 +816,7 @@ const GameBoard = memo(function GameBoard({
                                         y={pos.y - CITY_RADIUS - 16}
                                         textAnchor="middle"
                                         fill={CITY_COLORS[city]}
-                                        style={{ textShadow: "1px 2px 3px rgba(0,0,0,0.8)" }}
+                                        style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.45)" }}
                                         className="text-[24px] group-hover:text-[26px] font-bold uppercase pointer-events-none transition-all duration-200 tracking-widest"
                                     >
                                         {City[city]}
@@ -847,19 +846,19 @@ const GameBoard = memo(function GameBoard({
                                 >
                                     {/* Tactile 3D Depth Shadow under Space Tile */}
                                     <rect
-                                        x={1}
-                                        y={2}
+                                        x={2}
+                                        y={3}
                                         width={width}
                                         height={height}
                                         fill="rgba(0,0,0,0.25)"
-                                        rx={5}
+                                        rx={6}
                                         className="pointer-events-none"
                                     />
                                     <rect
                                         width={width}
                                         height={height}
                                         fill={SPACE_COLORS[SPACES[index].type]}
-                                        stroke={"rgba(0,0,0,0.2)"}
+                                        stroke={"rgba(0,0,0,0.3)"}
                                         strokeWidth={1}
                                         rx={4}
                                         className="transition-all duration-200 hover:filter-brightness-110 group-hover:stroke-[#fbbf24] group-hover:stroke-[3px]"

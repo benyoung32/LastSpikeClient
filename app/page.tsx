@@ -4,6 +4,10 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPlayer, createSession, joinSession } from "@/lib/api";
 import { useSignalR } from "@/app/context/SignalRContext";
+import GameOverScreen from "@/app/components/GameOverScreen";
+import ResultsScreen from "@/app/components/ResultsScreen";
+import { isDevMode } from "@/lib/devMode";
+import { createEmptyGameState } from "@/types";
 
 function HomeContent() {
   const router = useRouter();
@@ -14,8 +18,37 @@ function HomeContent() {
   const [sessionIdToJoin, setSessionIdToJoin] = useState(joinSessionId || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDevGameOverOpen, setIsDevGameOverOpen] = useState(false);
+  const [isDevResultsOpen, setIsDevResultsOpen] = useState(false);
   const { connection } = useSignalR();
   const isMounted = useRef(true);
+
+  // Dev mode toggle with 'g' key or close with 'Escape'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      const tagName = (activeElement?.tagName || "").toLowerCase();
+      if (tagName === "input" || tagName === "textarea" || activeElement?.isContentEditable) {
+        return;
+      }
+
+      if (isDevMode() && (e.key === "g" || e.key === "G")) {
+        setIsDevGameOverOpen(prev => {
+          if (prev) setIsDevResultsOpen(false);
+          return !prev;
+        });
+      } else if (e.key === "Escape") {
+        if (isDevResultsOpen) {
+          setIsDevResultsOpen(false);
+        } else if (isDevGameOverOpen) {
+          setIsDevGameOverOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDevResultsOpen, isDevGameOverOpen]);
 
   // Update session ID if URL param changes
   useEffect(() => {
@@ -191,6 +224,27 @@ function HomeContent() {
           </div>
         </div>
       </div>
+      {isDevGameOverOpen && (
+        <>
+          <GameOverScreen
+            onReturnHome={() => setIsDevGameOverOpen(false)}
+            onViewResults={() => setIsDevResultsOpen(true)}
+          />
+          <ResultsScreen
+            players={[
+              { id: "player-1", name: "Alice" },
+              { id: "player-2", name: "Bob" },
+            ]}
+            gameState={createEmptyGameState()}
+            isOpen={isDevResultsOpen}
+            onClose={() => setIsDevResultsOpen(false)}
+            onReturnHome={() => {
+              setIsDevResultsOpen(false);
+              setIsDevGameOverOpen(false);
+            }}
+          />
+        </>
+      )}
     </main>
   );
 }
